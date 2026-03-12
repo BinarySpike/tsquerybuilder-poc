@@ -17,8 +17,6 @@ export type PathType<T, P extends string> =
 
 /**
  * CONDITION INTERFACES
- * These contain ONLY the filter logic (is, in, beginsWith, etc.)
- * They NO LONGER contain .and or .or.
  */
 
 interface IThBaseCondition<T, V, R> {
@@ -58,27 +56,10 @@ export type IThCondition<T, V, R> = IThBaseCondition<T, V, R> &
   (V extends any[] ? IThArrayCondition<T, V, R> : {});
 
 /**
- * ROOT QUERY BUILDER
+ * QUERY RESOLVER (execution methods, only available at root level via intersection)
  */
 
-export interface IThQueryBuilderEntry<T> {
-  where(callback: (qb: IThQueryBuilderSubquery<T>) => IThQueryBuilderSubqueryChain<T, any>): IThQueryBuilderChain<T, any>;
-  where<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderChain<T, PathType<T, P>>>;
-}
-
-interface IThQueryChainMethods<T, V> {
-  andWhere(callback: (qb: IThQueryBuilderSubquery<T>) => IThQueryBuilderSubqueryChain<T, any>): IThQueryBuilderChain<T, V>;
-  andWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderChain<T, PathType<T, P>>>;
-
-  orWhere(callback: (qb: IThQueryBuilderSubquery<T>) => IThQueryBuilderSubqueryChain<T, any>): IThQueryBuilderChain<T, V>;
-  orWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderChain<T, PathType<T, P>>>;
-
-  // Connectors ONLY exist here, after a logic method (is/in/etc) has been called
-  readonly and: IThCondition<T, V, IThQueryBuilderChain<T, V>>;
-  readonly or: IThCondition<T, V, IThQueryBuilderChain<T, V>>;
-}
-
-interface IThQueryExecutionMethods<T> {
+interface IThQueryResolver<T> {
   select(): T[];
   count(): number;
   countDistinct<P extends Paths<T>>(path: P): number;
@@ -87,25 +68,40 @@ interface IThQueryExecutionMethods<T> {
   min<P extends Paths<T>>(path: P): PathType<T, P>;
   max<P extends Paths<T>>(path: P): PathType<T, P>;
   distinct<P extends Paths<T>>(path: P): PathType<T, P>[];
-  orderBy<P extends Paths<T>>(path: P, direction?: 'asc' | 'desc'): IThQueryBuilderChain<T, any>;
+  orderBy<P extends Paths<T>>(path: P, direction?: 'asc' | 'desc'): IThChainedQueryBuilder<T, any, IThQueryResolver<T>> & IThQueryResolver<T>;
 }
 
-export type IThQueryBuilderChain<T, V> = IThQueryChainMethods<T, V> & IThQueryExecutionMethods<T>;
+/**
+ * ROOT QUERY BUILDER
+ */
+
+export interface IThQueryBuilderEntry<T> {
+  where<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThChainedQueryBuilder<T, PathType<T, P>, IThQueryResolver<T>> & IThQueryResolver<T>>;
+  where(subquery: (qb: IThSubqueryBuilder<T>) => IThChainedQueryBuilder<T, any, null>): IThChainedQueryBuilder<T, any, IThQueryResolver<T>> & IThQueryResolver<T>;
+}
 
 /**
  * SUBQUERY BUILDER
  */
 
-export interface IThQueryBuilderSubquery<T> {
-  // Returns IThCondition (Logic only, no .and/.or)
-  where<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderSubqueryChain<T, PathType<T, P>>>;
+export interface IThSubqueryBuilder<T> {
+  where<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThChainedQueryBuilder<T, PathType<T, P>, null>>;
+  where(subquery: (qb: IThSubqueryBuilder<T>) => IThChainedQueryBuilder<T, any, null>): IThChainedQueryBuilder<T, any, null>;
 }
 
-export interface IThQueryBuilderSubqueryChain<T, V> {
-  andWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderSubqueryChain<T, PathType<T, P>>>;
-  orWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThQueryBuilderSubqueryChain<T, PathType<T, P>>>;
+/**
+ * CHAINED QUERY BUILDER
+ * R is IThQueryResolver<T> at root level (gives execution methods via & R),
+ * or null at subquery level (& null is a no-op).
+ */
 
-  // Shortcuts ONLY available once the previous condition is complete
-  readonly and: IThCondition<T, V, IThQueryBuilderSubqueryChain<T, V>>;
-  readonly or: IThCondition<T, V, IThQueryBuilderSubqueryChain<T, V>>;
+interface IThChainedQueryBuilder<T, V, R> {
+  andWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThChainedQueryBuilder<T, PathType<T, P>, R> & R>;
+  andWhere(subquery: (qb: IThSubqueryBuilder<T>) => IThChainedQueryBuilder<T, any, null>): IThChainedQueryBuilder<T, any, R> & R;
+
+  orWhere<P extends Paths<T>>(path: P): IThCondition<T, PathType<T, P>, IThChainedQueryBuilder<T, PathType<T, P>, R> & R>;
+  orWhere(subquery: (qb: IThSubqueryBuilder<T>) => IThChainedQueryBuilder<T, any, null>): IThChainedQueryBuilder<T, any, R> & R;
+
+  readonly and: IThCondition<T, V, IThChainedQueryBuilder<T, V, R> & R>;
+  readonly or: IThCondition<T, V, IThChainedQueryBuilder<T, V, R> & R>;
 }
