@@ -1,11 +1,13 @@
+interface EmptyQueryResolver {}
+
 export interface QueryBuilder {
   where(): ConditionBuilder<ChainedQueryBuilder<QueryResolver> & QueryResolver>;
-  where(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<null>): ChainedQueryBuilder<QueryResolver> & QueryResolver;
+  where(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<EmptyQueryResolver>): ChainedQueryBuilder<QueryResolver> & QueryResolver;
 }
 
 export interface SubqueryBuilder {
-  where(): ConditionBuilder<ChainedQueryBuilder<null>>;
-  where(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<null>): ConditionBuilder<ChainedQueryBuilder<null>>;
+  where(): ConditionBuilder<ChainedQueryBuilder<EmptyQueryResolver> & EmptyQueryResolver>;
+  where(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<EmptyQueryResolver>): ChainedQueryBuilder<EmptyQueryResolver> & EmptyQueryResolver;
 }
 
 interface ConditionBuilder<R> {
@@ -15,9 +17,9 @@ interface ConditionBuilder<R> {
 
 interface ChainedQueryBuilder<R> {
   andWhere(): ConditionBuilder<ChainedQueryBuilder<R> & R>;
-  andWhere(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<null>): ChainedQueryBuilder<R> & R; // ***
-  and: ConditionBuilder<R>;
-  or: ConditionBuilder<R>;
+  andWhere(subquery: (qb: SubqueryBuilder) => ChainedQueryBuilder<EmptyQueryResolver>): ChainedQueryBuilder<R> & R;
+  and: ConditionBuilder<ChainedQueryBuilder<R> & R>;
+  or: ConditionBuilder<ChainedQueryBuilder<R> & R>;
 }
 
 interface QueryResolver {
