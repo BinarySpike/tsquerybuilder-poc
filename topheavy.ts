@@ -71,6 +71,7 @@ interface QueryResolver<T> {
   select<P extends Paths<T>[]>(...paths: [...P]): SelectResult<T, P>[];
   select<A>(aggregate: (s: AggregateSelector<T>) => A): A;
   select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): (SelectResult<T, P> & A)[];
+  getConditions(): unknown[];
 }
 
 interface EmptyQueryResolver<T> { }
