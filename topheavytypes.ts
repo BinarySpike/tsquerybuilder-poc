@@ -11,6 +11,7 @@ import type {
     TypeDefinition,
     ThType,
     InferSchema,
+    ValidThField,
 } from './topheavytypes.types';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -362,10 +363,10 @@ function createThType(): ThType {
 
 // ── th() factory ─────────────────────────────────────────────────────
 
-export function th<S extends Record<string, any>>(cb: (t: ThType) => S): TypeDefinition<InferSchema<S>>;
-export function th(cb: (t: ThType) => void): TypeDefinition;
-export function th(cb: (t: ThType) => any): TypeDefinition {
+export function th<S extends Record<string, ValidThField> | void>(
+    cb: (t: ThType) => S
+): TypeDefinition<S extends Record<string, ValidThField> ? InferSchema<S> : unknown> {
     const t = createThType();
     const schema = cb(t);
-    return new TypeDefinitionImpl(schema ?? {});
+    return new TypeDefinitionImpl((schema ?? {}) as any);
 }

@@ -2,7 +2,8 @@ import { th } from "./topheavytypes";
 
 const Business = th(t => ({
     name: t.str,
-    customers: t.ref(() => Customer).array
+    customers: t.ref(() => Customer).array,
+    something: Customer
 }))
 
 type BusinessType = typeof Business.infer

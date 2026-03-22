@@ -91,6 +91,10 @@ export interface ThNullChain<Null = never> extends ThBaseChain<null, Null> {
     readonly nullable: ThNullChain<null>;
 }
 
+// ── Valid field types (for constraining th() schemas) ────────────────
+
+export type ValidThField = ThBaseChain<any, any> | TypeDefinition<any>;
+
 // ── Type inference utilities ─────────────────────────────────────────
 
 export type InferField<F> =
