@@ -1,78 +1,95 @@
 // ── Base chain: common to all types ──────────────────────────────────
+// Null defaults to `never` (non-nullable). `.nullable` sets Null = null,
+// and all chain methods propagate Null so `| null` is never lost.
 
-export interface ThBaseChain<T, Self extends ThBaseChain<T, Self>> {
-    readonly nullable: Omit<Self, '_type' | 'nullable'> & { readonly _type: T | null };
-    test(fn: (value: T) => boolean): Self;
+export interface ThBaseChain<T, Null = never> {
+    test(fn: (value: T | Null) => boolean): this;
     validate(value: any): boolean;
     /** @internal phantom property for type inference */
-    readonly _type: T;
+    readonly _type: T | Null;
 }
 
 // ── String chain ─────────────────────────────────────────────────────
 
-export interface ThStringChain extends ThBaseChain<string, ThStringChain> {
+export interface ThStringChain<Null = never> extends ThBaseChain<string, Null> {
+    readonly nullable: ThStringChain<null>;
+
     // Length constraints
-    len(n: number): ThStringChain;
-    length(n: number): ThStringChain;
-    minLen(n: number): ThStringChain;
-    maxLen(n: number): ThStringChain;
+    len(n: number): ThStringChain<Null>;
+    length(n: number): ThStringChain<Null>;
+    minLen(n: number): ThStringChain<Null>;
+    maxLen(n: number): ThStringChain<Null>;
 
     // Content constraints
-    beginsWith(value: string): ThStringChain;
-    endsWith(value: string): ThStringChain;
-    contains(value: string): ThStringChain;
-    regex(pattern: RegExp): ThStringChain;
+    beginsWith(value: string): ThStringChain<Null>;
+    endsWith(value: string): ThStringChain<Null>;
+    contains(value: string): ThStringChain<Null>;
+    regex(pattern: RegExp): ThStringChain<Null>;
 
     // Tagged template literal
-    template(strings: TemplateStringsArray, ...exprs: ThStringChain[]): ThStringChain;
+    template(strings: TemplateStringsArray, ...exprs: ThStringChain<any>[]): ThStringChain<Null>;
 
     // Transforms
-    uppercase(): ThStringChain;
-    lowercase(): ThStringChain;
+    uppercase(): ThStringChain<Null>;
+    lowercase(): ThStringChain<Null>;
 
     // Built-in formats
-    readonly email: ThStringChain;
+    readonly email: ThStringChain<Null>;
 }
 
 // ── Number chain ─────────────────────────────────────────────────────
 
-export interface ThNumberChain extends ThBaseChain<number, ThNumberChain> {
-    gt(n: number): ThNumberChain;
-    lt(n: number): ThNumberChain;
-    gte(n: number): ThNumberChain;
-    lte(n: number): ThNumberChain;
-    multipleOf(n: number): ThNumberChain;
-    readonly unsigned: ThNumberChain;
-    readonly signed: ThNumberChain;
+export interface ThNumberChain<Null = never> extends ThBaseChain<number, Null> {
+    readonly nullable: ThNumberChain<null>;
+
+    gt(n: number): ThNumberChain<Null>;
+    lt(n: number): ThNumberChain<Null>;
+    gte(n: number): ThNumberChain<Null>;
+    lte(n: number): ThNumberChain<Null>;
+    multipleOf(n: number): ThNumberChain<Null>;
+    readonly unsigned: ThNumberChain<Null>;
+    readonly signed: ThNumberChain<Null>;
 }
 
 // ── BigInt chain ─────────────────────────────────────────────────────
 
-export interface ThBigIntChain extends ThBaseChain<bigint, ThBigIntChain> {
-    gt(n: bigint): ThBigIntChain;
-    lt(n: bigint): ThBigIntChain;
-    gte(n: bigint): ThBigIntChain;
-    lte(n: bigint): ThBigIntChain;
-    multipleOf(n: bigint): ThBigIntChain;
+export interface ThBigIntChain<Null = never> extends ThBaseChain<bigint, Null> {
+    readonly nullable: ThBigIntChain<null>;
+
+    gt(n: bigint): ThBigIntChain<Null>;
+    lt(n: bigint): ThBigIntChain<Null>;
+    gte(n: bigint): ThBigIntChain<Null>;
+    lte(n: bigint): ThBigIntChain<Null>;
+    multipleOf(n: bigint): ThBigIntChain<Null>;
 }
 
 // ── Date chain ───────────────────────────────────────────────────────
 
-export interface ThDateChain extends ThBaseChain<Date, ThDateChain> {
-    gt(d: Date): ThDateChain;
-    lt(d: Date): ThDateChain;
-    gte(d: Date): ThDateChain;
-    lte(d: Date): ThDateChain;
-    min(dateStr: string): ThDateChain;
-    max(dateStr: string): ThDateChain;
+export interface ThDateChain<Null = never> extends ThBaseChain<Date, Null> {
+    readonly nullable: ThDateChain<null>;
+
+    gt(d: Date): ThDateChain<Null>;
+    lt(d: Date): ThDateChain<Null>;
+    gte(d: Date): ThDateChain<Null>;
+    lte(d: Date): ThDateChain<Null>;
+    min(dateStr: string): ThDateChain<Null>;
+    max(dateStr: string): ThDateChain<Null>;
 }
 
 // ── Simple chains (no extra constraints) ─────────────────────────────
 
-export interface ThBooleanChain extends ThBaseChain<boolean, ThBooleanChain> { }
-export interface ThSymbolChain extends ThBaseChain<symbol, ThSymbolChain> { }
-export interface ThUndefinedChain extends ThBaseChain<undefined, ThUndefinedChain> { }
-export interface ThNullChain extends ThBaseChain<null, ThNullChain> { }
+export interface ThBooleanChain<Null = never> extends ThBaseChain<boolean, Null> {
+    readonly nullable: ThBooleanChain<null>;
+}
+export interface ThSymbolChain<Null = never> extends ThBaseChain<symbol, Null> {
+    readonly nullable: ThSymbolChain<null>;
+}
+export interface ThUndefinedChain<Null = never> extends ThBaseChain<undefined, Null> {
+    readonly nullable: ThUndefinedChain<null>;
+}
+export interface ThNullChain<Null = never> extends ThBaseChain<null, Null> {
+    readonly nullable: ThNullChain<null>;
+}
 
 // ── Type inference utilities ─────────────────────────────────────────
 
@@ -108,6 +125,7 @@ export interface ThType {
     readonly bigint: ThBigIntChain;
     readonly undefined: ThUndefinedChain;
     readonly null: ThNullChain;
-    literal<T extends (string | number | boolean | symbol)[]>(...values: T): ThBaseChain<T[number], any>;
+    literal<T extends (string | number | boolean | symbol)[]>(...values: T): ThBaseChain<T[number]>;
+    ref<T>(fn: () => TypeDefinition<T>): TypeDefinition<T>;
 }
 

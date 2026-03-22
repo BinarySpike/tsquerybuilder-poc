@@ -2,12 +2,15 @@ import { th } from "./topheavytypes";
 
 const Business = th(t => ({
     name: t.str,
-    customers: Customer.array
+    customers: t.ref(() => Customer).array
 }))
 
-const BusinessType = typeof Business.infer
+type BusinessType = typeof Business.infer
 
-console.log(typeof BusinessType);
+const validBusiness: BusinessType = {
+    name: "Test",
+    customers: []
+}
 
 const Customer = th(t => ({
     id: t.num,
@@ -16,11 +19,13 @@ const Customer = th(t => ({
     address: t.string,
 }))
 
+console.log(Business.validate(validBusiness));
+
 type CustomerType = typeof Customer.infer;
 const validCustomer: CustomerType = {
     id: 1,
     companyName: "Test",
-    email: "bad",
+    email: null,
     address: "Test"
 }
 

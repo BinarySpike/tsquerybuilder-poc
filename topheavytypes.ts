@@ -256,13 +256,50 @@ class LiteralChainBuilder extends BaseChainBuilder {
     }
 }
 
+// ── RefTypeDefinition ────────────────────────────────────────────────
+
+class RefTypeDefinition {
+    private _resolve: () => any;
+    private _resolved: TypeDefinitionImpl | null = null;
+    private _isArray: boolean;
+
+    constructor(resolve: () => any, isArray = false) {
+        this._resolve = resolve;
+        this._isArray = isArray;
+    }
+
+    private _get(): TypeDefinitionImpl {
+        if (!this._resolved) {
+            this._resolved = this._resolve() as TypeDefinitionImpl;
+        }
+        return this._resolved;
+    }
+
+    get array(): RefTypeDefinition {
+        return new RefTypeDefinition(this._resolve, true);
+    }
+
+    get infer(): any {
+        return undefined; // phantom — only meaningful at the type level
+    }
+
+    validate(value: any): boolean {
+        const inner = this._get();
+        if (this._isArray) {
+            if (!Array.isArray(value)) return false;
+            return value.every((item: any) => inner.validate(item));
+        }
+        return inner.validate(value);
+    }
+}
+
 // ── TypeDefinitionImpl ───────────────────────────────────────────────
 
 class TypeDefinitionImpl implements TypeDefinition {
-    private _schema: Record<string, BaseChainBuilder | TypeDefinitionImpl>;
+    private _schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
     private _isArray: boolean;
 
-    constructor(schema: Record<string, BaseChainBuilder | TypeDefinitionImpl> = {}, isArray = false) {
+    constructor(schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> = {}, isArray = false) {
         this._schema = schema;
         this._isArray = isArray;
     }
@@ -290,6 +327,8 @@ class TypeDefinitionImpl implements TypeDefinition {
                 if (!chain.validate(value[key])) return false;
             } else if (chain instanceof TypeDefinitionImpl) {
                 if (!chain.validate(value[key])) return false;
+            } else if (chain instanceof RefTypeDefinition) {
+                if (!chain.validate(value[key])) return false;
             }
         }
         return true;
@@ -314,6 +353,9 @@ function createThType(): ThType {
         get null()      { return new NullChainBuilder(); },
         literal(...values: any[]) {
             return new LiteralChainBuilder(values);
+        },
+        ref(fn: () => any) {
+            return new RefTypeDefinition(fn);
         },
     } as ThType;
 }
