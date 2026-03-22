@@ -1,4 +1,4 @@
-import type { Query } from './topheavy.ts'
+import type { Query } from './topheavy'
 
 type ConditionLeaf = [string, string, unknown];
 type ConditionEntry = ConditionLeaf | ConditionGroup;

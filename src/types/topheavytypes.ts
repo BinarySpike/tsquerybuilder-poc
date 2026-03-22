@@ -53,72 +53,75 @@ class BaseChainBuilder {
 class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
     declare readonly _type: string;
 
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'string');
+    }
+
     len(n: number): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.length === n);
+        this.validators.push((v: any) => v.length === n);
         return this;
     }
 
     length(n: number): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.length === n);
+        this.validators.push((v: any) => v.length === n);
         return this;
     }
 
     minLen(n: number): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.length >= n);
+        this.validators.push((v: any) => v.length >= n);
         return this;
     }
 
     maxLen(n: number): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.length <= n);
+        this.validators.push((v: any) => v.length <= n);
         return this;
     }
 
     beginsWith(s: string): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.startsWith(s));
+        this.validators.push((v: any) => v.startsWith(s));
         return this;
     }
 
     endsWith(s: string): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.endsWith(s));
+        this.validators.push((v: any) => v.endsWith(s));
         return this;
     }
 
     contains(s: string): this {
-        this.validators.push((v: any) => typeof v === 'string' && v.includes(s));
+        this.validators.push((v: any) => v.includes(s));
         return this;
     }
 
     regex(pattern: RegExp): this {
-        this.validators.push((v: any) => typeof v === 'string' && pattern.test(v));
+        this.validators.push((v: any) => pattern.test(v));
         return this;
     }
 
     template(strings: TemplateStringsArray, ...exprs: any[]): this {
-        this.validators.push((v: any) => {
-            if (typeof v !== 'string') return false;
-            let pattern = '^';
-            for (let i = 0; i < strings.length; i++) {
-                pattern += strings[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                if (i < exprs.length) pattern += '.*';
-            }
-            pattern += '$';
-            return new RegExp(pattern).test(v);
-        });
+        let pattern = '^';
+        for (let i = 0; i < strings.length; i++) {
+            pattern += strings[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (i < exprs.length) pattern += '.*';
+        }
+        pattern += '$';
+        const regex = new RegExp(pattern);
+        this.validators.push((v: any) => regex.test(v));
         return this;
     }
 
     uppercase(): this {
-        this.validators.push((v: any) => typeof v === 'string' && v === v.toUpperCase());
+        this.validators.push((v: any) => v === v.toUpperCase());
         return this;
     }
 
     lowercase(): this {
-        this.validators.push((v: any) => typeof v === 'string' && v === v.toLowerCase());
+        this.validators.push((v: any) => v === v.toLowerCase());
         return this;
     }
 
     get email(): this {
-        this.validators.push((v: any) => typeof v === 'string' && EMAIL_REGEX.test(v));
+        this.validators.push((v: any) => EMAIL_REGEX.test(v));
         return this;
     }
 }
@@ -127,6 +130,11 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
 
 class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
     declare readonly _type: number;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'number' && !Number.isNaN(v));
+    }
 
     gt(n: number): this {
         this.validators.push((v: any) => v > n);
@@ -149,17 +157,16 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
     }
 
     multipleOf(n: number): this {
-        this.validators.push((v: any) => typeof v === 'number' && v % n === 0);
+        this.validators.push((v: any) => v % n === 0);
         return this;
     }
 
     get unsigned(): this {
-        this.validators.push((v: any) => typeof v === 'number' && v >= 0);
+        this.validators.push((v: any) => v >= 0);
         return this;
     }
 
     get signed(): this {
-        this.validators.push((v: any) => typeof v === 'number');
         return this;
     }
 }
@@ -168,6 +175,11 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
 
 class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
     declare readonly _type: bigint;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'bigint');
+    }
 
     gt(n: bigint): this {
         this.validators.push((v: any) => v > n);
@@ -190,7 +202,7 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
     }
 
     multipleOf(n: bigint): this {
-        this.validators.push((v: any) => typeof v === 'bigint' && v % n === 0n);
+        this.validators.push((v: any) => v % n === 0n);
         return this;
     }
 }
@@ -199,6 +211,11 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
 
 class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
     declare readonly _type: Date;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => v instanceof Date && !Number.isNaN(v.valueOf()));
+    }
 
     gt(d: Date): this {
         this.validators.push((v: any) => v > d);
@@ -221,12 +238,12 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
     }
 
     min(s: string): this {
-        this.validators.push((v: any) => v instanceof Date && v >= new Date(s));
+        this.validators.push((v: any) => v >= new Date(s));
         return this;
     }
 
     max(s: string): this {
-        this.validators.push((v: any) => v instanceof Date && v <= new Date(s));
+        this.validators.push((v: any) => v <= new Date(s));
         return this;
     }
 }
@@ -235,18 +252,38 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
 
 class BooleanChainBuilder extends BaseChainBuilder implements ThBooleanChain {
     declare readonly _type: boolean;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'boolean');
+    }
 }
 
 class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
     declare readonly _type: symbol;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'symbol');
+    }
 }
 
 class UndefinedChainBuilder extends BaseChainBuilder implements ThUndefinedChain {
     declare readonly _type: undefined;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => typeof v === 'undefined');
+    }
 }
 
 class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
     declare readonly _type: null;
+
+    constructor() {
+        super();
+        this.validators.push((v: any) => v === null);
+    }
 }
 
 // ── LiteralChainBuilder ─────────────────────────────────────────────

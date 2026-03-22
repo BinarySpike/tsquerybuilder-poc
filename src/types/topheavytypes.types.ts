@@ -140,4 +140,3 @@ export interface ThType {
     literal<T extends (string | number | boolean | symbol)[]>(...values: T): ThBaseChain<T[number]>;
     ref<T>(fn: () => TypeDefinition<T>): ThRefField<T>;
 }
-

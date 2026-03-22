@@ -1,4 +1,4 @@
-import type { Paths, PathType, SelectResult } from './path.ts'
+import type { Paths, PathType, SelectResult } from './path'
 
 export interface Query<T> {
   where<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, QueryResolver<T>> & QueryResolver<T>>;
