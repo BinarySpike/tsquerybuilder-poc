@@ -3,14 +3,15 @@ import { th } from "./topheavytypes";
 const Business = th(t => ({
     name: t.str,
     customers: t.ref(() => Customer).array,
-    something: Customer
+    something: t.str
 }))
 
 type BusinessType = typeof Business.infer
 
 const validBusiness: BusinessType = {
     name: "Test",
-    customers: []
+    customers: [],
+    something: "hi"
 }
 
 const Customer = th(t => ({
@@ -40,13 +41,21 @@ const LineItem = th(t => ({
 
 const Invoice = th(t => ({
     id: t.num,
-    customer: Customer,
-    items: LineItem.array,
+    customer: t.ref(() => Customer),
+    items: t.ref(() => LineItem).array,
     dueDate: t.date,
     totalAmount: t.number,
 }));
 
 type InvoiceType = typeof Invoice.infer
+
+const validInvoice: InvoiceType = {
+    id: 1,
+    customer: validCustomer,
+    items: [],
+    dueDate: new Date(),
+    totalAmount: 100,
+}
 
 const EverythingElse = th(t => ({
     sym: t.sym,

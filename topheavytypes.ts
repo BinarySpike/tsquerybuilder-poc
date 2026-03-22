@@ -9,6 +9,7 @@ import type {
     ThNullChain,
     ThBaseChain,
     TypeDefinition,
+    ThRefField,
     ThType,
     InferSchema,
     ValidThField,
@@ -358,7 +359,7 @@ function createThType(): ThType {
         ref(fn: () => any) {
             return new RefTypeDefinition(fn);
         },
-    } as ThType;
+    } as unknown as ThType;
 }
 
 // ── th() factory ─────────────────────────────────────────────────────

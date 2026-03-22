@@ -93,7 +93,15 @@ export interface ThNullChain<Null = never> extends ThBaseChain<null, Null> {
 
 // ── Valid field types (for constraining th() schemas) ────────────────
 
-export type ValidThField = ThBaseChain<any, any> | TypeDefinition<any>;
+declare const __thRefBrand: unique symbol;
+
+/** Branded type returned by t.ref() — distinguishes lazy refs from raw TypeDefinitions */
+export interface ThRefField<T = unknown> extends TypeDefinition<T> {
+    readonly [__thRefBrand]: true;
+    readonly array: ThRefField<T[]>;
+}
+
+export type ValidThField = ThBaseChain<any, any> | ThRefField<any>;
 
 // ── Type inference utilities ─────────────────────────────────────────
 
@@ -130,6 +138,6 @@ export interface ThType {
     readonly undefined: ThUndefinedChain;
     readonly null: ThNullChain;
     literal<T extends (string | number | boolean | symbol)[]>(...values: T): ThBaseChain<T[number]>;
-    ref<T>(fn: () => TypeDefinition<T>): TypeDefinition<T>;
+    ref<T>(fn: () => TypeDefinition<T>): ThRefField<T>;
 }
 
