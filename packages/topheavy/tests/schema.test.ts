@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { schema } from '../src/schema';
-import { Customer, Business, Invoice } from './testData.ts';
+import { Customer, Business, Invoice, Address } from './testData.ts';
 
 describe('schema() schema definition and validation', () => {
   describe('Business schema', () => {
@@ -35,7 +35,13 @@ describe('schema() schema definition and validation', () => {
         email: "test@example.com",
         address: { number: "456", street: "High", city: "London", zipCode: "90210" },
       };
+
       expect(Customer.validate(valid)).toBe(true);
+    });
+
+    it('has a companyName field of type nullable string', () => {
+      expect(Customer._schema.companyName.kind).toBe('string');
+      expect(Customer._schema.companyName.isNullable).toBe(true);
     });
   });
 
@@ -103,7 +109,15 @@ describe('schema() schema definition and validation', () => {
       expect(Business.validate(invalid)).toBe(false);
     });
   });
+  describe('Address schema', () => {
+    it('has a zipcode field of type string with length 5', () => {
+      expect(Address._schema.zipCode.kind).toBe('string');
+      expect(Address._schema.zipCode.isNullable).toBe(false);
+      expect(Address._schema.zipCode.constraints.find((c: any) => c.name === 'len')?.args[0]).toBe(5);
+    });
+  });
 });
+
 
 describe('chain constraint types', () => {
   it('validates string constraints', () => {

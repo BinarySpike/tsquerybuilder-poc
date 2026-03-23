@@ -2,7 +2,19 @@
 // Null defaults to `never` (non-nullable). `.nullable` sets Null = null,
 // and all chain methods propagate Null so `| null` is never lost.
 
+export interface ThConstraint {
+    name: string;
+    args: any[];
+}
+
 export interface ThBaseChain<T, Null = never> {
+    /** The primitive kind of this chain builder */
+    readonly kind: string;
+    /** Whether this field explicitly allows nulls/undefined */
+    readonly isNullable: boolean;
+    /** The recorded validation constraints */
+    readonly constraints: ThConstraint[];
+
     test(fn: (value: T | Null) => boolean): this;
     validate(value: any): boolean;
     /** @internal phantom property for type inference */
@@ -134,18 +146,18 @@ export interface ThNullChain<Null = never> extends ThBaseChain<null, Null> {
 declare const __thRefBrand: unique symbol;
 
 /** Branded type returned by t.ref() — distinguishes lazy refs from raw TypeDefinitions */
-export interface ThRefField<T = unknown> extends TypeDefinition<T> {
+export interface ThRefField<T = unknown, S = Record<string, any>> extends TypeDefinition<T, S> {
     readonly [__thRefBrand]: true;
-    readonly array: ThRefField<T[]>;
+    readonly array: ThRefField<T[], S>;
 }
 
-export type ValidThField = ThBaseChain<any, any> | ThRefField<any>;
+export type ValidThField = ThBaseChain<any, any> | ThRefField<any, any>;
 
 // ── Type inference utilities ─────────────────────────────────────────
 
 export type InferField<F> =
     F extends { readonly _type: infer T } ? T :
-    F extends TypeDefinition<infer T> ? T :
+    F extends TypeDefinition<infer T, any> ? T :
     never;
 
 export type InferSchema<S> = {
@@ -157,9 +169,11 @@ export type InferSchema<S> = {
 /**
  * A constructed and executable schema definition.
  */
-export interface TypeDefinition<T = unknown> {
+export interface TypeDefinition<T = unknown, S = Record<string, any>> {
+    /** The underlying raw schema definition/properties. */
+    readonly _schema: S;
     /** Promotes this type into an array array-type validation. */
-    readonly array: TypeDefinition<T[]>;
+    readonly array: TypeDefinition<T[], S>;
     /** @internal phantom property */
     readonly infer: T;
     /** Validates an incoming data object against this schema. */
@@ -199,5 +213,5 @@ export interface ThType {
     /** Validates against specific literal values (e.g. `'admin' | 'user'`). */
     literal<T extends (string | number | boolean | symbol)[]>(...values: T): ThBaseChain<T[number]>;
     /** Lazily loads an external/nested schema definition to prevent circular references. */
-    ref<T>(fn: () => TypeDefinition<T>): ThRefField<T>;
+    ref<T, S = Record<string, any>>(fn: () => TypeDefinition<T, S>): ThRefField<T, S>;
 }

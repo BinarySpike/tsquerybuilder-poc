@@ -13,6 +13,7 @@ import type {
     ThType,
     InferSchema,
     ValidThField,
+    ThConstraint,
 } from './schema.types';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -27,18 +28,20 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 class BaseChainBuilder {
     validators: ValidatorFn[] = [];
-    private _nullable = false;
+    constraints: ThConstraint[] = [];
+    isNullable = false;
+    kind: string = 'unknown';
 
     /** @internal phantom — only meaningful at the type level */
     declare readonly _type: unknown;
 
     validate(value: any): boolean {
-        if (this._nullable && (value === null || value === undefined)) return true;
+        if (this.isNullable && (value === null || value === undefined)) return true;
         return this.validators.every(fn => fn(value));
     }
 
     get nullable(): this {
-        this._nullable = true;
+        this.isNullable = true;
         return this;
     }
 
@@ -52,6 +55,7 @@ class BaseChainBuilder {
 
 class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
     declare readonly _type: string;
+    kind = 'string';
 
     constructor() {
         super();
@@ -59,46 +63,55 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
     }
 
     len(n: number): this {
+        this.constraints.push({ name: 'len', args: [n] });
         this.validators.push((v: any) => v.length === n);
         return this;
     }
 
     length(n: number): this {
+        this.constraints.push({ name: 'length', args: [n] });
         this.validators.push((v: any) => v.length === n);
         return this;
     }
 
     minLen(n: number): this {
+        this.constraints.push({ name: 'minLen', args: [n] });
         this.validators.push((v: any) => v.length >= n);
         return this;
     }
 
     maxLen(n: number): this {
+        this.constraints.push({ name: 'maxLen', args: [n] });
         this.validators.push((v: any) => v.length <= n);
         return this;
     }
 
     beginsWith(s: string): this {
+        this.constraints.push({ name: 'beginsWith', args: [s] });
         this.validators.push((v: any) => v.startsWith(s));
         return this;
     }
 
     endsWith(s: string): this {
+        this.constraints.push({ name: 'endsWith', args: [s] });
         this.validators.push((v: any) => v.endsWith(s));
         return this;
     }
 
     contains(s: string): this {
+        this.constraints.push({ name: 'contains', args: [s] });
         this.validators.push((v: any) => v.includes(s));
         return this;
     }
 
     regex(pattern: RegExp): this {
+        this.constraints.push({ name: 'regex', args: [pattern] });
         this.validators.push((v: any) => pattern.test(v));
         return this;
     }
 
     template(strings: TemplateStringsArray, ...exprs: any[]): this {
+        this.constraints.push({ name: 'template', args: [strings, ...exprs] });
         let pattern = '^';
         for (let i = 0; i < strings.length; i++) {
             pattern += strings[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -111,16 +124,19 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
     }
 
     uppercase(): this {
+        this.constraints.push({ name: 'uppercase', args: [] });
         this.validators.push((v: any) => v === v.toUpperCase());
         return this;
     }
 
     lowercase(): this {
+        this.constraints.push({ name: 'lowercase', args: [] });
         this.validators.push((v: any) => v === v.toLowerCase());
         return this;
     }
 
     get email(): this {
+        this.constraints.push({ name: 'email', args: [] });
         this.validators.push((v: any) => EMAIL_REGEX.test(v));
         return this;
     }
@@ -130,6 +146,7 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
 
 class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
     declare readonly _type: number;
+    kind = 'number';
 
     constructor() {
         super();
@@ -137,36 +154,43 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
     }
 
     gt(n: number): this {
+        this.constraints.push({ name: 'gt', args: [n] });
         this.validators.push((v: any) => v > n);
         return this;
     }
 
     lt(n: number): this {
+        this.constraints.push({ name: 'lt', args: [n] });
         this.validators.push((v: any) => v < n);
         return this;
     }
 
     gte(n: number): this {
+        this.constraints.push({ name: 'gte', args: [n] });
         this.validators.push((v: any) => v >= n);
         return this;
     }
 
     lte(n: number): this {
+        this.constraints.push({ name: 'lte', args: [n] });
         this.validators.push((v: any) => v <= n);
         return this;
     }
 
     multipleOf(n: number): this {
+        this.constraints.push({ name: 'multipleOf', args: [n] });
         this.validators.push((v: any) => v % n === 0);
         return this;
     }
 
     get unsigned(): this {
+        this.constraints.push({ name: 'unsigned', args: [] });
         this.validators.push((v: any) => v >= 0);
         return this;
     }
 
     get signed(): this {
+        this.constraints.push({ name: 'signed', args: [] });
         return this;
     }
 }
@@ -175,6 +199,7 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
 
 class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
     declare readonly _type: bigint;
+    kind = 'bigint';
 
     constructor() {
         super();
@@ -182,26 +207,31 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
     }
 
     gt(n: bigint): this {
+        this.constraints.push({ name: 'gt', args: [n] });
         this.validators.push((v: any) => v > n);
         return this;
     }
 
     lt(n: bigint): this {
+        this.constraints.push({ name: 'lt', args: [n] });
         this.validators.push((v: any) => v < n);
         return this;
     }
 
     gte(n: bigint): this {
+        this.constraints.push({ name: 'gte', args: [n] });
         this.validators.push((v: any) => v >= n);
         return this;
     }
 
     lte(n: bigint): this {
+        this.constraints.push({ name: 'lte', args: [n] });
         this.validators.push((v: any) => v <= n);
         return this;
     }
 
     multipleOf(n: bigint): this {
+        this.constraints.push({ name: 'multipleOf', args: [n] });
         this.validators.push((v: any) => v % n === 0n);
         return this;
     }
@@ -211,6 +241,7 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
 
 class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
     declare readonly _type: Date;
+    kind = 'date';
 
     constructor() {
         super();
@@ -218,31 +249,37 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
     }
 
     gt(d: Date): this {
+        this.constraints.push({ name: 'gt', args: [d] });
         this.validators.push((v: any) => v > d);
         return this;
     }
 
     lt(d: Date): this {
+        this.constraints.push({ name: 'lt', args: [d] });
         this.validators.push((v: any) => v < d);
         return this;
     }
 
     gte(d: Date): this {
+        this.constraints.push({ name: 'gte', args: [d] });
         this.validators.push((v: any) => v >= d);
         return this;
     }
 
     lte(d: Date): this {
+        this.constraints.push({ name: 'lte', args: [d] });
         this.validators.push((v: any) => v <= d);
         return this;
     }
 
     min(s: string): this {
+        this.constraints.push({ name: 'min', args: [s] });
         this.validators.push((v: any) => v >= new Date(s));
         return this;
     }
 
     max(s: string): this {
+        this.constraints.push({ name: 'max', args: [s] });
         this.validators.push((v: any) => v <= new Date(s));
         return this;
     }
@@ -252,6 +289,7 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
 
 class BooleanChainBuilder extends BaseChainBuilder implements ThBooleanChain {
     declare readonly _type: boolean;
+    kind = 'boolean';
 
     constructor() {
         super();
@@ -261,6 +299,7 @@ class BooleanChainBuilder extends BaseChainBuilder implements ThBooleanChain {
 
 class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
     declare readonly _type: symbol;
+    kind = 'symbol';
 
     constructor() {
         super();
@@ -270,6 +309,7 @@ class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
 
 class UndefinedChainBuilder extends BaseChainBuilder implements ThUndefinedChain {
     declare readonly _type: undefined;
+    kind = 'undefined';
 
     constructor() {
         super();
@@ -279,6 +319,7 @@ class UndefinedChainBuilder extends BaseChainBuilder implements ThUndefinedChain
 
 class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
     declare readonly _type: null;
+    kind = 'null';
 
     constructor() {
         super();
@@ -289,8 +330,13 @@ class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
 // ── LiteralChainBuilder ─────────────────────────────────────────────
 
 class LiteralChainBuilder extends BaseChainBuilder {
+    kind = 'literal';
+    values: any[];
+
     constructor(values: any[]) {
         super();
+        this.values = values;
+        this.constraints.push({ name: 'literal', args: values });
         this.validators.push((v: any) => values.includes(v));
     }
 }
@@ -322,6 +368,10 @@ class RefTypeDefinition {
         return undefined; // phantom — only meaningful at the type level
     }
 
+    get _schema(): Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> {
+        return this._get()._schema;
+    }
+
     validate(value: any): boolean {
         const inner = this._get();
         if (this._isArray) {
@@ -335,7 +385,7 @@ class RefTypeDefinition {
 // ── TypeDefinitionImpl ───────────────────────────────────────────────
 
 class TypeDefinitionImpl implements TypeDefinition {
-    private _schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
+    readonly _schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
     private _isArray: boolean;
 
     constructor(schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> = {}, isArray = false) {
@@ -415,8 +465,11 @@ function createThType(): ThType {
  */
 export function schema<S extends Record<string, ValidThField> | void>(
     cb: (t: ThType) => S
-): TypeDefinition<S extends Record<string, ValidThField> ? InferSchema<S> : unknown> {
+): TypeDefinition<
+    S extends Record<string, ValidThField> ? InferSchema<S> : unknown,
+    S extends Record<string, ValidThField> ? S : Record<string, any>
+> {
     const t = createThType();
-    const schema = cb(t);
-    return new TypeDefinitionImpl((schema ?? {}) as any);
+    const schemaObj = cb(t);
+    return new TypeDefinitionImpl((schemaObj ?? {}) as any) as any;
 }
