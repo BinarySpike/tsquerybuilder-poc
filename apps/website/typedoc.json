@@ -1,0 +1,12 @@
+{
+  "entryPoints": [
+    "../../packages/topheavy/src/query/index.ts",
+    "../../packages/topheavy/src/types/index.ts"
+  ],
+  "out": "./docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "tsconfig": "../../packages/topheavy/tsconfig.json",
+  "hideGenerator": true,
+  "readme": "none",
+  "name": "TopHeavy API"
+}

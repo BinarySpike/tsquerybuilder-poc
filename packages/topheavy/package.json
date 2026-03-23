@@ -1,0 +1,29 @@
+{
+  "name": "topheavy",
+  "version": "0.1.0",
+  "description": "TopHeavy query builder and type validation library",
+  "type": "module",
+  "exports": {
+    "./query": {
+      "import": "./dist/query/index.js",
+      "types": "./dist/query/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}
