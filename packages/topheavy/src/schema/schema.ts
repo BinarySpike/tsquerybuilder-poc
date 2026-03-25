@@ -35,19 +35,28 @@ class BaseChainBuilder {
     /** @internal phantom — only meaningful at the type level */
     declare readonly _type: unknown;
 
+    protected _clone(): this {
+        const clone = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+        clone.validators = [...this.validators];
+        clone.constraints = [...this.constraints];
+        return clone;
+    }
+
     validate(value: any): boolean {
         if (this.isNullable && (value === null || value === undefined)) return true;
         return this.validators.every(fn => fn(value));
     }
 
     get nullable(): this {
-        this.isNullable = true;
-        return this;
+        const clone = this._clone();
+        clone.isNullable = true;
+        return clone;
     }
 
     test(fn: ValidatorFn): this {
-        this.validators.push(fn);
-        return this;
+        const clone = this._clone();
+        clone.validators.push(fn);
+        return clone;
     }
 }
 
@@ -62,56 +71,69 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
         this.validators.push((v: any) => typeof v === 'string');
     }
 
+    override get nullable(): ThStringChain<null> {
+        return super.nullable as ThStringChain<null>;
+    }
+
     len(n: number): this {
-        this.constraints.push({ name: 'len', args: [n] });
-        this.validators.push((v: any) => v.length === n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'len', args: [n] });
+        clone.validators.push((v: any) => v.length === n);
+        return clone;
     }
 
     length(n: number): this {
-        this.constraints.push({ name: 'length', args: [n] });
-        this.validators.push((v: any) => v.length === n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'length', args: [n] });
+        clone.validators.push((v: any) => v.length === n);
+        return clone;
     }
 
     minLen(n: number): this {
-        this.constraints.push({ name: 'minLen', args: [n] });
-        this.validators.push((v: any) => v.length >= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'minLen', args: [n] });
+        clone.validators.push((v: any) => v.length >= n);
+        return clone;
     }
 
     maxLen(n: number): this {
-        this.constraints.push({ name: 'maxLen', args: [n] });
-        this.validators.push((v: any) => v.length <= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'maxLen', args: [n] });
+        clone.validators.push((v: any) => v.length <= n);
+        return clone;
     }
 
     beginsWith(s: string): this {
-        this.constraints.push({ name: 'beginsWith', args: [s] });
-        this.validators.push((v: any) => v.startsWith(s));
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'beginsWith', args: [s] });
+        clone.validators.push((v: any) => v.startsWith(s));
+        return clone;
     }
 
     endsWith(s: string): this {
-        this.constraints.push({ name: 'endsWith', args: [s] });
-        this.validators.push((v: any) => v.endsWith(s));
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'endsWith', args: [s] });
+        clone.validators.push((v: any) => v.endsWith(s));
+        return clone;
     }
 
     contains(s: string): this {
-        this.constraints.push({ name: 'contains', args: [s] });
-        this.validators.push((v: any) => v.includes(s));
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'contains', args: [s] });
+        clone.validators.push((v: any) => v.includes(s));
+        return clone;
     }
 
     regex(pattern: RegExp): this {
-        this.constraints.push({ name: 'regex', args: [pattern] });
-        this.validators.push((v: any) => pattern.test(v));
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'regex', args: [pattern] });
+        clone.validators.push((v: any) => pattern.test(v));
+        return clone;
     }
 
     template(strings: TemplateStringsArray, ...exprs: any[]): this {
-        this.constraints.push({ name: 'template', args: [strings, ...exprs] });
+        const clone = this._clone();
+        clone.constraints.push({ name: 'template', args: [strings, ...exprs] });
         let pattern = '^';
         for (let i = 0; i < strings.length; i++) {
             pattern += strings[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -119,26 +141,29 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
         }
         pattern += '$';
         const regex = new RegExp(pattern);
-        this.validators.push((v: any) => regex.test(v));
-        return this;
+        clone.validators.push((v: any) => regex.test(v));
+        return clone;
     }
 
     uppercase(): this {
-        this.constraints.push({ name: 'uppercase', args: [] });
-        this.validators.push((v: any) => v === v.toUpperCase());
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'uppercase', args: [] });
+        clone.validators.push((v: any) => v === v.toUpperCase());
+        return clone;
     }
 
     lowercase(): this {
-        this.constraints.push({ name: 'lowercase', args: [] });
-        this.validators.push((v: any) => v === v.toLowerCase());
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lowercase', args: [] });
+        clone.validators.push((v: any) => v === v.toLowerCase());
+        return clone;
     }
 
     get email(): this {
-        this.constraints.push({ name: 'email', args: [] });
-        this.validators.push((v: any) => EMAIL_REGEX.test(v));
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'email', args: [] });
+        clone.validators.push((v: any) => EMAIL_REGEX.test(v));
+        return clone;
     }
 }
 
@@ -153,46 +178,57 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
         this.validators.push((v: any) => typeof v === 'number' && !Number.isNaN(v));
     }
 
+    override get nullable(): ThNumberChain<null> {
+        return super.nullable as ThNumberChain<null>;
+    }
+
     gt(n: number): this {
-        this.constraints.push({ name: 'gt', args: [n] });
-        this.validators.push((v: any) => v > n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gt', args: [n] });
+        clone.validators.push((v: any) => v > n);
+        return clone;
     }
 
     lt(n: number): this {
-        this.constraints.push({ name: 'lt', args: [n] });
-        this.validators.push((v: any) => v < n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lt', args: [n] });
+        clone.validators.push((v: any) => v < n);
+        return clone;
     }
 
     gte(n: number): this {
-        this.constraints.push({ name: 'gte', args: [n] });
-        this.validators.push((v: any) => v >= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gte', args: [n] });
+        clone.validators.push((v: any) => v >= n);
+        return clone;
     }
 
     lte(n: number): this {
-        this.constraints.push({ name: 'lte', args: [n] });
-        this.validators.push((v: any) => v <= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lte', args: [n] });
+        clone.validators.push((v: any) => v <= n);
+        return clone;
     }
 
     multipleOf(n: number): this {
-        this.constraints.push({ name: 'multipleOf', args: [n] });
-        this.validators.push((v: any) => v % n === 0);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'multipleOf', args: [n] });
+        clone.validators.push((v: any) => v % n === 0);
+        return clone;
     }
 
     get unsigned(): this {
-        this.constraints.push({ name: 'unsigned', args: [] });
-        this.validators.push((v: any) => v >= 0);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'unsigned', args: [] });
+        clone.validators.push((v: any) => v >= 0);
+        return clone;
     }
 
     get signed(): this {
-        this.constraints.push({ name: 'signed', args: [] });
-        this.validators.push((v: any) => typeof v === 'number');
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'signed', args: [] });
+        clone.validators.push((v: any) => Number.isFinite(v));
+        return clone;
     }
 }
 
@@ -207,34 +243,43 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
         this.validators.push((v: any) => typeof v === 'bigint');
     }
 
+    override get nullable(): ThBigIntChain<null> {
+        return super.nullable as ThBigIntChain<null>;
+    }
+
     gt(n: bigint): this {
-        this.constraints.push({ name: 'gt', args: [n] });
-        this.validators.push((v: any) => v > n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gt', args: [n] });
+        clone.validators.push((v: any) => v > n);
+        return clone;
     }
 
     lt(n: bigint): this {
-        this.constraints.push({ name: 'lt', args: [n] });
-        this.validators.push((v: any) => v < n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lt', args: [n] });
+        clone.validators.push((v: any) => v < n);
+        return clone;
     }
 
     gte(n: bigint): this {
-        this.constraints.push({ name: 'gte', args: [n] });
-        this.validators.push((v: any) => v >= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gte', args: [n] });
+        clone.validators.push((v: any) => v >= n);
+        return clone;
     }
 
     lte(n: bigint): this {
-        this.constraints.push({ name: 'lte', args: [n] });
-        this.validators.push((v: any) => v <= n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lte', args: [n] });
+        clone.validators.push((v: any) => v <= n);
+        return clone;
     }
 
     multipleOf(n: bigint): this {
-        this.constraints.push({ name: 'multipleOf', args: [n] });
-        this.validators.push((v: any) => v % n === 0n);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'multipleOf', args: [n] });
+        clone.validators.push((v: any) => v % n === 0n);
+        return clone;
     }
 }
 
@@ -249,40 +294,50 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
         this.validators.push((v: any) => v instanceof Date && !Number.isNaN(v.valueOf()));
     }
 
+    override get nullable(): ThDateChain<null> {
+        return super.nullable as ThDateChain<null>;
+    }
+
     gt(d: Date): this {
-        this.constraints.push({ name: 'gt', args: [d] });
-        this.validators.push((v: any) => v > d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gt', args: [d] });
+        clone.validators.push((v: any) => v > d);
+        return clone;
     }
 
     lt(d: Date): this {
-        this.constraints.push({ name: 'lt', args: [d] });
-        this.validators.push((v: any) => v < d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lt', args: [d] });
+        clone.validators.push((v: any) => v < d);
+        return clone;
     }
 
     gte(d: Date): this {
-        this.constraints.push({ name: 'gte', args: [d] });
-        this.validators.push((v: any) => v >= d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'gte', args: [d] });
+        clone.validators.push((v: any) => v >= d);
+        return clone;
     }
 
     lte(d: Date): this {
-        this.constraints.push({ name: 'lte', args: [d] });
-        this.validators.push((v: any) => v <= d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'lte', args: [d] });
+        clone.validators.push((v: any) => v <= d);
+        return clone;
     }
 
     min(d: Date): this {
-        this.constraints.push({ name: 'min', args: [d] });
-        this.validators.push((v: any) => v >= d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'min', args: [d] });
+        clone.validators.push((v: any) => v >= d);
+        return clone;
     }
 
     max(d: Date): this {
-        this.constraints.push({ name: 'max', args: [d] });
-        this.validators.push((v: any) => v <= d);
-        return this;
+        const clone = this._clone();
+        clone.constraints.push({ name: 'max', args: [d] });
+        clone.validators.push((v: any) => v <= d);
+        return clone;
     }
 }
 
@@ -296,6 +351,10 @@ class BooleanChainBuilder extends BaseChainBuilder implements ThBooleanChain {
         super();
         this.validators.push((v: any) => typeof v === 'boolean');
     }
+
+    override get nullable(): ThBooleanChain<null> {
+        return super.nullable as ThBooleanChain<null>;
+    }
 }
 
 class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
@@ -305,6 +364,10 @@ class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
     constructor() {
         super();
         this.validators.push((v: any) => typeof v === 'symbol');
+    }
+
+    override get nullable(): ThSymbolChain<null> {
+        return super.nullable as ThSymbolChain<null>;
     }
 }
 
@@ -316,6 +379,10 @@ class UndefinedChainBuilder extends BaseChainBuilder implements ThUndefinedChain
         super();
         this.validators.push((v: any) => typeof v === 'undefined');
     }
+
+    override get nullable(): ThUndefinedChain<null> {
+        return super.nullable as ThUndefinedChain<null>;
+    }
 }
 
 class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
@@ -325,6 +392,10 @@ class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
     constructor() {
         super();
         this.validators.push((v: any) => v === null);
+    }
+
+    override get nullable(): ThNullChain<null> {
+        return super.nullable as ThNullChain<null>;
     }
 }
 
@@ -425,18 +496,18 @@ class TypeDefinitionImpl implements TypeDefinition {
 
 function createThType(): ThType {
     const t: ThType = {
-        get str() { return new StringChainBuilder() as unknown as ThType['str']; },
-        get string() { return new StringChainBuilder() as unknown as ThType['string']; },
-        get num() { return new NumberChainBuilder() as unknown as ThType['num']; },
-        get number() { return new NumberChainBuilder() as unknown as ThType['number']; },
-        get bool() { return new BooleanChainBuilder() as unknown as ThType['bool']; },
-        get date() { return new DateChainBuilder() as unknown as ThType['date']; },
-        get sym() { return new SymbolChainBuilder() as unknown as ThType['sym']; },
-        get symbol() { return new SymbolChainBuilder() as unknown as ThType['symbol']; },
-        get bigInt() { return new BigIntChainBuilder() as unknown as ThType['bigInt']; },
-        get bigint() { return new BigIntChainBuilder() as unknown as ThType['bigint']; },
-        get undefined() { return new UndefinedChainBuilder() as unknown as ThType['undefined']; },
-        get null() { return new NullChainBuilder() as unknown as ThType['null']; },
+        get str() { return new StringChainBuilder() as ThType['str']; },
+        get string() { return new StringChainBuilder() as ThType['string']; },
+        get num() { return new NumberChainBuilder() as ThType['num']; },
+        get number() { return new NumberChainBuilder() as ThType['number']; },
+        get bool() { return new BooleanChainBuilder() as ThType['bool']; },
+        get date() { return new DateChainBuilder() as ThType['date']; },
+        get sym() { return new SymbolChainBuilder() as ThType['sym']; },
+        get symbol() { return new SymbolChainBuilder() as ThType['symbol']; },
+        get bigInt() { return new BigIntChainBuilder() as ThType['bigInt']; },
+        get bigint() { return new BigIntChainBuilder() as ThType['bigint']; },
+        get undefined() { return new UndefinedChainBuilder() as ThType['undefined']; },
+        get null() { return new NullChainBuilder() as ThType['null']; },
         literal(...values: any[]) {
             return new LiteralChainBuilder(values) as unknown as ReturnType<ThType['literal']>;
         },

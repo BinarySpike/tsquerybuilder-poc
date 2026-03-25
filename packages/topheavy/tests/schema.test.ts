@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { schema } from '../src/schema';
+import type { ThStringChain } from '../src/schema/schema.types';
 import { Customer, Business, Invoice, Address } from './testData.ts';
 
 describe('schema() schema definition and validation', () => {
@@ -158,5 +159,69 @@ describe('chain constraint types', () => {
     expect(scheme.validate({ status: "active" })).toBe(true);
     expect(scheme.validate({ status: "inactive" })).toBe(true);
     expect(scheme.validate({ status: "deleted" } as any)).toBe(false);
+  });
+});
+
+describe('template constraint', () => {
+  it('matches a fixed string with no interpolations', () => {
+    const scheme = schema(t => ({ code: t.str.template`FIXED` }));
+    expect(scheme.validate({ code: 'FIXED' })).toBe(true);
+    expect(scheme.validate({ code: 'OTHER' })).toBe(false);
+    expect(scheme.validate({ code: 'PREFIX-FIXED' })).toBe(false);
+  });
+
+  it('anchors both ends — no leading or trailing content allowed', () => {
+    const scheme = schema(t => ({ code: t.str.template`AB` }));
+    expect(scheme.validate({ code: 'AB' })).toBe(true);
+    expect(scheme.validate({ code: 'xAB' })).toBe(false);
+    expect(scheme.validate({ code: 'ABx' })).toBe(false);
+    expect(scheme.validate({ code: 'xABx' })).toBe(false);
+  });
+
+  it('allows any content in interpolated slots', () => {
+    const scheme = schema(t => ({ ref: t.str.template`INV-${t.str}-END` }));
+    expect(scheme.validate({ ref: 'INV--END' })).toBe(true);       // empty slot
+    expect(scheme.validate({ ref: 'INV-001-END' })).toBe(true);
+    expect(scheme.validate({ ref: 'INV-abc123-END' })).toBe(true);
+    expect(scheme.validate({ ref: 'INV-001' })).toBe(false);        // missing suffix
+    expect(scheme.validate({ ref: '001-END' })).toBe(false);        // missing prefix
+  });
+
+  it('handles multiple interpolated slots independently', () => {
+    const scheme = schema(t => ({ path: t.str.template`/${t.str}/${t.str}` }));
+    expect(scheme.validate({ path: '/a/b' })).toBe(true);
+    expect(scheme.validate({ path: '/foo/bar' })).toBe(true);
+    expect(scheme.validate({ path: '/a/' })).toBe(true);            // empty second slot
+    expect(scheme.validate({ path: '/a' })).toBe(false);            // missing second segment
+    expect(scheme.validate({ path: 'a/b' })).toBe(false);           // missing leading slash
+  });
+
+  it('escapes regex special characters in literal parts', () => {
+    const scheme = schema(t => ({ ver: t.str.template`v1.0.${t.str}` }));
+    expect(scheme.validate({ ver: 'v1.0.42' })).toBe(true);
+    expect(scheme.validate({ ver: 'v1X0Y42' })).toBe(false);        // dots must be literal
+  });
+
+  it('chains additional constraints after template', () => {
+    const scheme = schema(t => ({
+      code: t.str.template`INV-${t.str}`.minLen(6),
+    }));
+    expect(scheme.validate({ code: 'INV-1' })).toBe(false);         // too short (len 5)
+    expect(scheme.validate({ code: 'INV-12' })).toBe(true);
+    expect(scheme.validate({ code: 'OTHER' })).toBe(false);         // wrong pattern
+  });
+
+  it('records a template constraint entry', () => {
+    const chain = schema(t => ({ x: t.str.template`A-${t.str}-B` }));
+    const constraints = (chain.schema.x as ThStringChain).constraints;
+    expect(constraints.some(c => c.name === 'template')).toBe(true);
+  });
+
+  it('is immutable — base chain is not affected', () => {
+    const base = schema(t => ({ x: t.str }));
+    const withTemplate = schema(t => ({ x: t.str.template`PREFIX-${t.str}` }));
+    expect(base.validate({ x: 'anything' })).toBe(true);
+    expect(withTemplate.validate({ x: 'anything' })).toBe(false);
+    expect(withTemplate.validate({ x: 'PREFIX-anything' })).toBe(true);
   });
 });

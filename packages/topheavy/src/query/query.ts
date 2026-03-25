@@ -1,9 +1,6 @@
-import type { Query } from './query.types'
+import type { Query, QueryConditionLeaf, QueryConditionGroup, QueryConditions } from './query.types'
 
-type ConditionLeaf = [string, string, unknown];
-type ConditionEntry = ConditionLeaf | ConditionGroup;
-type ConditionGroup = (ConditionEntry | 'and' | 'or')[];
-type Conditions = (ConditionGroup | 'and' | 'or')[];
+type ConditionEntry = QueryConditionLeaf | QueryConditionGroup;
 
 class AggregateSelectorImpl {
   count() { return { type: 'count' as const }; }
@@ -16,8 +13,8 @@ class AggregateSelectorImpl {
 }
 
 class QueryBuilderImpl {
-  private _conditions: Conditions = [];
-  private _currentGroup: ConditionGroup = [];
+  private _conditions: QueryConditions = [];
+  private _currentGroup: QueryConditionGroup = [];
   private _currentPath: string = '';
   private _negated: boolean = false;
   private _orderBys: Array<{ path: string; direction: string }> = [];
@@ -155,7 +152,7 @@ class QueryBuilderImpl {
   }
 
   /** Inspect the built conditions without triggering a select. */
-  getConditions(): Conditions {
+  getConditions(): QueryConditions {
     this._finalizeGroup();
     return this._conditions;
   }

@@ -1,5 +1,14 @@
 import type { Paths, PathType, SelectResult } from './path'
 
+// ── Condition tree types ──────────────────────────────────────────────
+
+/** A single condition leaf: [path, operator, value] */
+export type QueryConditionLeaf = [string, string, unknown];
+/** A grouped set of conditions joined by logical operators */
+export type QueryConditionGroup = (QueryConditionLeaf | QueryConditionGroup | 'and' | 'or')[];
+/** The full conditions tree returned by {@link QueryResolver.getConditions} */
+export type QueryConditions = (QueryConditionGroup | 'and' | 'or')[];
+
 /**
  * Main query building interface containing chained condition methods.
  * @typeParam T - The generic data type representing the schema.
@@ -147,7 +156,7 @@ export interface QueryResolver<T> {
   select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): (SelectResult<T, P> & A)[];
 
   /** Resolves and returns the constructed query conditions tree without executing a select. */
-  getConditions(): (unknown[] | 'and' | 'or')[];
+  getConditions(): QueryConditions;
 }
 
 export interface EmptyQueryResolver<T> { }

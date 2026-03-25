@@ -28,5 +28,5 @@ export type LeafKey<P extends string> =
 // Build a result type from a tuple of paths
 export type SelectResult<T, P extends any[]> =
     P extends [infer First extends string, ...infer Rest]
-    ? { [K in LeafKey<First>]: PathType<T, First> } & SelectResult<T, Rest>
+    ? { [K in First]: PathType<T, First> } & SelectResult<T, Rest>
     : {};

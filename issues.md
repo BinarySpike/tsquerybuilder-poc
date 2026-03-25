@@ -1,97 +1,54 @@
-Bugs
-1. nullable getter mutates the builder in place
-schema.ts:43-46
-
-
-get nullable(): this {
-    this.isNullable = true;  // mutates the original
-    return this;             // returns the same instance
-}
-The TypeScript type pretends nullable returns a new ThStringChain<null>, but at runtime it mutates and returns this. This means:
-
-
-const base = t.str.minLen(3);
-const withNull = base.nullable;
-// base === withNull (same object, but different TS types)
-// base.isNullable is now true — the "base" chain was silently mutated
-The email getter (schema.ts:138-142) has the same problem. Fix by making a copy: return Object.assign(Object.create(Object.getPrototypeOf(this)), this, { isNullable: true }), or switch to immutable builder pattern.
-
-2. ./types export points to a non-existent directory
-package.json:11-14
-
-The "./types" export references ./dist/types/index.js but the source directory is src/schema/, not src/types/. This is a broken export that would fail at runtime.
-
-3. JSDoc example uses the wrong function name
-schema.ts:459
-
-
- * const userSchema = th(t => ({   // ← should be schema(t => ({
-Design Issues
-4. ThDateChain has inconsistent date input types
-schema.types.ts:116-127
-
-gt/lt/gte/lte take Date objects, but min/max take string. This is confusing at the API level — users would reasonably expect uniform input. Either unify them to both accept Date | string, or remove the duplicate methods (since gte/lte and min/max are semantically identical).
-
-5. template expression type is misleading
-schema.types.ts:53
-
-
-template(strings: TemplateStringsArray, ...exprs: ThStringChain<any>[]): ThStringChain<Null>;
-The type signature implies you pass ThStringChain instances as interpolations (like validators), but the implementation simply replaces any interpolation with .* regardless. Either change the exprs type to any[] to match the runtime, or actually use the chain builders to inform the pattern.
-
-6. SelectResult has a key-collision bug
-path.ts:29-32
-
-
-export type SelectResult<T, P extends any[]> =
-    P extends [infer First extends string, ...infer Rest]
-    ? { [K in LeafKey<First>]: PathType<T, First> } & SelectResult<T, Rest>
-    : {};
-If you select('customer.id', 'order.id'), both paths have leaf key id, producing { id: CustomerId } & { id: OrderId }. The intersection silently picks one. The key should incorporate the full path, or be documented as a known limitation.
-
-7. validate(value: T) is typed too strictly on the interface
-schema.types.ts:180
-
-
-validate(value: T): boolean;
-The primary use case of a validator is receiving unknown data from an external source. Typing it as T means you can't call it without an explicit cast. It should be validate(value: unknown): boolean (or value: T | unknown via an overload) to double as a type guard.
-
-Code Quality
-8. _validateObject has a redundant instanceof chain
-schema.ts:412-424
-
-All three branches do the same thing:
-
-
-if (chain instanceof BaseChainBuilder) {
-    if (!chain.validate(value[key])) return false;
-} else if (chain instanceof TypeDefinitionImpl) {
-    if (!chain.validate(value[key])) return false;
-} else if (chain instanceof RefTypeDefinition) {
-    if (!chain.validate(value[key])) return false;
-}
-They all call .validate(). Extract a common interface or type guard and collapse to if (!chain.validate(value[key])) return false.
-
-9. where and andWhere/orWhere use the Function type
-query.ts:41
-
-
-where(pathOrSubquery: string | Function): any {
-Function is banned in strict TypeScript (it's an escape hatch). Use (qb: QueryBuilderImpl) => void or the appropriate typed callback.
-
-10. len and length are silent aliases without documentation
-schema.ts:65-75
-
-Both do exactly the same thing. Either document this explicitly in the JSDoc, or remove one and keep only len (or length) to avoid API confusion.
-
-11. getConditions() is typed as unknown[] in the interface
-query.types.ts:150
-
-
-getConditions(): unknown[];
-The internal Conditions type from query.ts is specific and useful. Exporting it (even as an opaque type alias) would let consumers inspect conditions without casting.
-
-Minor
-signed getter adds a constraint but no validator (schema.ts:192-195) — it's a no-op beyond recording the constraint. This is inconsistent with every other constraint method.
-_schema is underscore-prefixed but publicly typed — the convention implies it's internal, but it's part of the TypeDefinition interface. If it's meant to be accessible (e.g., for schema introspection), drop the underscore.
-createThType() casts as as unknown as ThType (schema.ts:449) — suggests the returned object doesn't fully satisfy ThType without casting. Worth aligning the implementation type with the interface.
+ ---                                                                                                                                                               
+  TypeScript Compilation Errors (8 errors)                                                                                                                          
+                                                                                                                                                                    
+  Every subclass that overrides the nullable getter has the same error — the return type narrows away from this. In BaseChainBuilder, nullable returns this, but    
+  each override returns a specific interface (e.g., ThStringChain<null>), which TS can't prove is assignable to this.                                               
+                                                                                                                                                                    
+  Fix: Change the base class nullable getter to not return this — instead return BaseChainBuilder, or suppress the override errors by not using override and casting
+   differently. The cleanest solution is likely to remove the polymorphic this return from the base and have each subclass define its own nullable without override.
+                                                                                                                                                                    
+  ---             
+  Logic / Runtime Issues
+                                                                                                                                                                    
+  1. _validateObject doesn't reject extra keys (schema.ts:484-492) — Validation only checks that schema-defined fields pass; it silently accepts objects with extra
+  properties. This may be intentional (open schemas), but if you want strict validation, you'd need an extra-keys check.                                            
+  2. _validateObject doesn't check for missing keys — If a field is not nullable but the key is entirely absent from the object, value[key] is undefined, which gets
+   passed to the chain's validate(). For non-nullable chains, the base type check (e.g., typeof v === 'string') will fail, so this does reject — but the error      
+  reason is opaque ("not a string" vs "field missing").
+  3. multipleOf with floats (schema.ts:216) — v % n === 0 is unreliable for floating-point numbers (e.g., 0.3 % 0.1 !== 0). Consider using a tolerance-based check  
+  like Math.abs(v % n) < Number.EPSILON.                                                                                                                            
+  4. template ignores interpolated chain constraints (schema.ts:134-146) — As your TODO.md notes, all interpolation slots emit .* regardless of what chain was
+  passed. This is a known TODO but worth flagging.                                                                                                                  
+  5. len and length are independent (schema.ts:78-89) — These are documented as aliases but they record different constraint names ('len' vs 'length'). If anything
+  inspects constraints by name, this inconsistency could bite you. Consider having one delegate to the other.                                                       
+                  
+  ---                                                                                                                                                               
+  Query Module Issues
+                                                                                                                                                                    
+  6. where() with subquery pushes conditions at top level (query.ts:40-44) — Subquery conditions are spread directly into the parent's _conditions via
+  push(...sub._conditions). This flattens the grouping — the subquery loses its parenthesization semantics. You likely want to push the sub-conditions as a nested  
+  group: this._conditions.push(sub._conditions).
+  7. Mutability — QueryBuilderImpl mutates internal state (_negated, _currentPath, _currentGroup). The chain methods return this, so the builder can't be forked.   
+  This is fine for single-use query building, but worth noting compared to the schema module which uses immutable cloning.                                          
+  8. select with aggregate-only doesn't handle empty paths (query.ts:133-152) — When calling select(aggregateFn), paths ends up as [] (empty array) but is still
+  included in the result as select: []. This works but differs from the type signature where aggregate-only select should not include select.                       
+                  
+  ---                                                                                                                                                               
+  Type-Level Issues
+                                                                                                                                                                    
+  9. SelectResult produces intersection, not a clean object (path.ts:29-32) — SelectResult builds { a: X } & { b: Y } via intersection. This works at the type level
+   but IDE tooltips will be messy. A mapped-type approach would produce cleaner output.                                                                             
+  10. Paths recurses into nested objects without depth limit (path.ts:9-14) — For deeply nested or self-referential types, this can cause TS to hit its recursion
+  limit. The PathsWrapper helps defer evaluation but doesn't actually cap depth.                                                                                    
+  11. Paths doesn't traverse into arrays — If a field is string[], the path stops there — you can't query items.0.description. This seems intentional given the
+  ArrayCondition type, but worth documenting.                                                                                                                       
+                  
+  ---                                                                                                                                                               
+  Minor / Style   
+               
+  12. signed constraint (schema.ts:227-232) — The signed getter just checks Number.isFinite(v), which doesn't really mean "signed." All finite numbers (including
+  positive ones) pass. It's unclear what the intended semantics are.                                                                                                
+  13. email regex is very permissive (schema.ts:25) — /^[^\s@]+@[^\s@]+\.[^\s@]+$/ accepts things like a@b.c. This is common and probably fine for a basic check,
+  but worth noting.                                                                                                                                                 
+                  
+  The most impactful issues to address are the TS compilation errors (#1), the subquery flattening bug (#6), and the floating-point modulo (#3).  
