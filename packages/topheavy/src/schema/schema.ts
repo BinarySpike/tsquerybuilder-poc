@@ -191,6 +191,7 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
 
     get signed(): this {
         this.constraints.push({ name: 'signed', args: [] });
+        this.validators.push((v: any) => typeof v === 'number');
         return this;
     }
 }
@@ -272,15 +273,15 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
         return this;
     }
 
-    min(s: string): this {
-        this.constraints.push({ name: 'min', args: [s] });
-        this.validators.push((v: any) => v >= new Date(s));
+    min(d: Date): this {
+        this.constraints.push({ name: 'min', args: [d] });
+        this.validators.push((v: any) => v >= d);
         return this;
     }
 
-    max(s: string): this {
-        this.constraints.push({ name: 'max', args: [s] });
-        this.validators.push((v: any) => v <= new Date(s));
+    max(d: Date): this {
+        this.constraints.push({ name: 'max', args: [d] });
+        this.validators.push((v: any) => v <= d);
         return this;
     }
 }
@@ -368,8 +369,8 @@ class RefTypeDefinition {
         return undefined; // phantom — only meaningful at the type level
     }
 
-    get _schema(): Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> {
-        return this._get()._schema;
+    get schema(): Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> {
+        return this._get().schema;
     }
 
     validate(value: any): boolean {
@@ -385,23 +386,23 @@ class RefTypeDefinition {
 // ── TypeDefinitionImpl ───────────────────────────────────────────────
 
 class TypeDefinitionImpl implements TypeDefinition {
-    readonly _schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
+    readonly schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
     private _isArray: boolean;
 
     constructor(schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> = {}, isArray = false) {
-        this._schema = schema;
+        this.schema = schema;
         this._isArray = isArray;
     }
 
     get array(): TypeDefinitionImpl {
-        return new TypeDefinitionImpl(this._schema, true);
+        return new TypeDefinitionImpl(this.schema, true);
     }
 
     get infer(): any {
         return undefined; // phantom — only meaningful at the type level
     }
 
-    validate(value: any): boolean {
+    validate(value: unknown): value is any {
         if (this._isArray) {
             if (!Array.isArray(value)) return false;
             return value.every((item: any) => this._validateObject(item));
@@ -411,12 +412,8 @@ class TypeDefinitionImpl implements TypeDefinition {
 
     private _validateObject(value: any): boolean {
         if (typeof value !== 'object' || value === null) return false;
-        for (const [key, chain] of Object.entries(this._schema)) {
-            if (chain instanceof BaseChainBuilder) {
-                if (!chain.validate(value[key])) return false;
-            } else if (chain instanceof TypeDefinitionImpl) {
-                if (!chain.validate(value[key])) return false;
-            } else if (chain instanceof RefTypeDefinition) {
+        for (const [key, chain] of Object.entries(this.schema)) {
+            if ('validate' in chain && typeof chain.validate === 'function') {
                 if (!chain.validate(value[key])) return false;
             }
         }
@@ -427,26 +424,27 @@ class TypeDefinitionImpl implements TypeDefinition {
 // ── createThType ─────────────────────────────────────────────────────
 
 function createThType(): ThType {
-    return {
-        get str() { return new StringChainBuilder(); },
-        get string() { return new StringChainBuilder(); },
-        get num() { return new NumberChainBuilder(); },
-        get number() { return new NumberChainBuilder(); },
-        get bool() { return new BooleanChainBuilder(); },
-        get date() { return new DateChainBuilder(); },
-        get sym() { return new SymbolChainBuilder(); },
-        get symbol() { return new SymbolChainBuilder(); },
-        get bigInt() { return new BigIntChainBuilder(); },
-        get bigint() { return new BigIntChainBuilder(); },
-        get undefined() { return new UndefinedChainBuilder(); },
-        get null() { return new NullChainBuilder(); },
+    const t: ThType = {
+        get str() { return new StringChainBuilder() as unknown as ThType['str']; },
+        get string() { return new StringChainBuilder() as unknown as ThType['string']; },
+        get num() { return new NumberChainBuilder() as unknown as ThType['num']; },
+        get number() { return new NumberChainBuilder() as unknown as ThType['number']; },
+        get bool() { return new BooleanChainBuilder() as unknown as ThType['bool']; },
+        get date() { return new DateChainBuilder() as unknown as ThType['date']; },
+        get sym() { return new SymbolChainBuilder() as unknown as ThType['sym']; },
+        get symbol() { return new SymbolChainBuilder() as unknown as ThType['symbol']; },
+        get bigInt() { return new BigIntChainBuilder() as unknown as ThType['bigInt']; },
+        get bigint() { return new BigIntChainBuilder() as unknown as ThType['bigint']; },
+        get undefined() { return new UndefinedChainBuilder() as unknown as ThType['undefined']; },
+        get null() { return new NullChainBuilder() as unknown as ThType['null']; },
         literal(...values: any[]) {
-            return new LiteralChainBuilder(values);
+            return new LiteralChainBuilder(values) as unknown as ReturnType<ThType['literal']>;
         },
         ref(fn: () => any) {
-            return new RefTypeDefinition(fn);
+            return new RefTypeDefinition(fn) as any;
         },
-    } as unknown as ThType;
+    };
+    return t;
 }
 
 // ── th() factory ─────────────────────────────────────────────────────
@@ -457,7 +455,7 @@ function createThType(): ThType {
  * @returns A TypeDefinition matching the generated schema signature.
  * @example
  * ```ts
- * const userSchema = th(t => ({
+ * const userSchema = schema(t => ({
  *   name: t.string().minLen(3),
  *   age: t.number().gte(18)
  * }));

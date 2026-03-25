@@ -40,8 +40,8 @@ describe('schema() schema definition and validation', () => {
     });
 
     it('has a companyName field of type nullable string', () => {
-      expect(Customer._schema.companyName.kind).toBe('string');
-      expect(Customer._schema.companyName.isNullable).toBe(true);
+      expect(Customer.schema.companyName.kind).toBe('string');
+      expect(Customer.schema.companyName.isNullable).toBe(true);
     });
   });
 
@@ -111,9 +111,9 @@ describe('schema() schema definition and validation', () => {
   });
   describe('Address schema', () => {
     it('has a zipcode field of type string with length 5', () => {
-      expect(Address._schema.zipCode.kind).toBe('string');
-      expect(Address._schema.zipCode.isNullable).toBe(false);
-      expect(Address._schema.zipCode.constraints.find((c: any) => c.name === 'len')?.args[0]).toBe(5);
+      expect(Address.schema.zipCode.kind).toBe('string');
+      expect(Address.schema.zipCode.isNullable).toBe(false);
+      expect(Address.schema.zipCode.constraints.find((c: any) => c.name === 'len')?.args[0]).toBe(5);
     });
   });
 });

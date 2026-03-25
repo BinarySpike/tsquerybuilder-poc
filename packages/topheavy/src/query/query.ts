@@ -38,7 +38,7 @@ class QueryBuilderImpl {
 
   // --- Query / Subquery ---
 
-  where(pathOrSubquery: string | Function): any {
+  where(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
@@ -89,7 +89,7 @@ class QueryBuilderImpl {
 
   // --- Cross-path chaining (starts new group) ---
 
-  andWhere(pathOrSubquery: string | Function): any {
+  andWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
     this._conditions.push('and');
     if (typeof pathOrSubquery === 'function') {
@@ -103,7 +103,7 @@ class QueryBuilderImpl {
     return this;
   }
 
-  orWhere(pathOrSubquery: string | Function): any {
+  orWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
     this._conditions.push('or');
     if (typeof pathOrSubquery === 'function') {

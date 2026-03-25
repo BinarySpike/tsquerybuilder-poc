@@ -8,9 +8,9 @@
       "import": "./dist/query/index.js",
       "types": "./dist/query/index.d.ts"
     },
-    "./types": {
-      "import": "./dist/types/index.js",
-      "types": "./dist/types/index.d.ts"
+    "./schema": {
+      "import": "./dist/schema/index.js",
+      "types": "./dist/schema/index.d.ts"
     }
   },
   "scripts": {

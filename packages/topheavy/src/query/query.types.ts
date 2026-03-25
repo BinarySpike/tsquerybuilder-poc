@@ -147,7 +147,7 @@ export interface QueryResolver<T> {
   select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): (SelectResult<T, P> & A)[];
 
   /** Resolves and returns the constructed query conditions tree without executing a select. */
-  getConditions(): unknown[];
+  getConditions(): (unknown[] | 'and' | 'or')[];
 }
 
 export interface EmptyQueryResolver<T> { }

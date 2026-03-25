@@ -29,9 +29,9 @@ export interface ThStringChain<Null = never> extends ThBaseChain<string, Null> {
     readonly nullable: ThStringChain<null>;
 
     // Length constraints
-    /** Ensures exact length */
+    /** Ensures exact length. Alias for {@link length}. */
     len(n: number): ThStringChain<Null>;
-    /** Ensures exact length */
+    /** Ensures exact length. Alias for {@link len}. */
     length(n: number): ThStringChain<Null>;
     /** Ensures minimum length */
     minLen(n: number): ThStringChain<Null>;
@@ -120,10 +120,10 @@ export interface ThDateChain<Null = never> extends ThBaseChain<Date, Null> {
     gte(d: Date): ThDateChain<Null>;
     /** On or before this date instance */
     lte(d: Date): ThDateChain<Null>;
-    /** Minimum date string parsed */
-    min(dateStr: string): ThDateChain<Null>;
-    /** Maximum date string parsed */
-    max(dateStr: string): ThDateChain<Null>;
+    /** Minimum date (on or after) */
+    min(date: Date): ThDateChain<Null>;
+    /** Maximum date (on or before) */
+    max(date: Date): ThDateChain<Null>;
 }
 
 // ── Simple chains (no extra constraints) ─────────────────────────────
@@ -171,13 +171,13 @@ export type InferSchema<S> = {
  */
 export interface TypeDefinition<T = unknown, S = Record<string, any>> {
     /** The underlying raw schema definition/properties. */
-    readonly _schema: S;
+    readonly schema: S;
     /** Promotes this type into an array array-type validation. */
     readonly array: TypeDefinition<T[], S>;
     /** @internal phantom property */
     readonly infer: T;
     /** Validates an incoming data object against this schema. */
-    validate(value: T): boolean;
+    validate(value: unknown): value is T;
 }
 
 // ── ThType: the builder object passed to th() ────────────────────────
