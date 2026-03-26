@@ -145,7 +145,7 @@ class QueryBuilderImpl {
 
     return {
       conditions: this._conditions,
-      select: paths,
+      ...(paths.length > 0 && { select: paths }),
       ...(aggregate !== undefined && { aggregate }),
       ...(this._orderBys.length > 0 && { orderBy: this._orderBys }),
     };

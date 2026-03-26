@@ -9,15 +9,21 @@ export interface PathsWrapper<T> {
 export type Paths<T> = T extends Date | Array<any> ? never :
     T extends object ? { [K in keyof T]:
         K extends string | number ?
-        `${K}` | (T[K] extends object ? `${K}.${PathsWrapper<T[K]>['value']}` : never)
+        `${K}` | (
+            T[K] extends Array<infer U> ?
+                (U extends object ? `${K}.${PathsWrapper<U>['value']}` : never) :
+                T[K] extends object ? `${K}.${PathsWrapper<T[K]>['value']}` : never
+        )
         : never
     }[keyof T] : never;
  
-// PathType remains the same as it handles the resolved strings
+// PathType resolves a dotted path, broadcasting through arrays
 export type PathType<T, P extends string> =
     P extends `${infer Key}.${infer Rest}` ?
     Key extends keyof T ?
-    PathType<T[Key], Rest>
+        T[Key] extends Array<infer U> ?
+            PathType<U, Rest>[] :
+            PathType<T[Key], Rest>
     : never
     : P extends keyof T ? T[P] : never;
 
@@ -26,7 +32,6 @@ export type LeafKey<P extends string> =
     P extends `${string}.${infer Rest}` ? LeafKey<Rest> : P;
 
 // Build a result type from a tuple of paths
-export type SelectResult<T, P extends any[]> =
-    P extends [infer First extends string, ...infer Rest]
-    ? { [K in First]: PathType<T, First> } & SelectResult<T, Rest>
-    : {};
+export type SelectResult<T, P extends string[]> = {
+    [K in P[number]]: PathType<T, K>
+};

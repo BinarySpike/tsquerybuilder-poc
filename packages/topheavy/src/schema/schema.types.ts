@@ -82,8 +82,6 @@ export interface ThNumberChain<Null = never> extends ThBaseChain<number, Null> {
     multipleOf(n: number): ThNumberChain<Null>;
     /** Ensure positive purely unsigned */
     readonly unsigned: ThNumberChain<Null>;
-    /** Explicitly allows signed integers */
-    readonly signed: ThNumberChain<Null>;
 }
 
 // ── BigInt chain ─────────────────────────────────────────────────────

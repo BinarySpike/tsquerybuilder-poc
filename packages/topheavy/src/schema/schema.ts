@@ -22,7 +22,8 @@ import type {
 
 type ValidatorFn = (value: any) => boolean;
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX = /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_+-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i;
 
 // ── BaseChainBuilder ─────────────────────────────────────────────────
 
@@ -222,12 +223,6 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
         return clone;
     }
 
-    get signed(): this {
-        const clone = this._clone();
-        clone.constraints.push({ name: 'signed', args: [] });
-        clone.validators.push((v: any) => Number.isFinite(v));
-        return clone;
-    }
 }
 
 // ── BigIntChainBuilder ───────────────────────────────────────────────
