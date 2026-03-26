@@ -9,6 +9,12 @@ export type QueryConditionGroup = (QueryConditionLeaf | QueryConditionGroup | 'a
 /** The full conditions tree returned by {@link QueryResolver.getConditions} */
 export type QueryConditions = (QueryConditionGroup | 'and' | 'or')[];
 
+/** A single ordering specification produced by {@link QueryResolver.orderBy} */
+export interface QueryOrderBy {
+  path: string;
+  direction: 'asc' | 'desc';
+}
+
 /**
  * Main query building interface containing chained condition methods.
  * @typeParam T - The generic data type representing the schema.
@@ -64,8 +70,8 @@ export interface NumberCondition<V, R> {
   greaterThan(value: number): R;
   /** Strict less than (`<`) */
   lessThan(value: number): R;
-  /** Range inclusion (inclusive by default) */
-  between(min: number, max: number, inclusive?: boolean): R;
+  /** Range inclusion (always inclusive, matching SQL BETWEEN semantics) */
+  between(min: number, max: number): R;
 }
 
 /** Chronological constraint operators available for date fields */
@@ -74,8 +80,8 @@ export interface DateCondition<V, R> {
   before(value: Date): R;
   /** Must occur strictly after the target date */
   after(value: Date): R;
-  /** Range inclusion constraint for date comparisons */
-  between(start: Date, end: Date, inclusive?: boolean): R;
+  /** Range inclusion constraint for date comparisons (always inclusive, matching SQL BETWEEN semantics) */
+  between(start: Date, end: Date): R;
 }
 
 /** Structural matchers for finding elements inside array typed fields */
@@ -117,19 +123,19 @@ export interface ChainedQuery<T, V, R> {
  */
 export interface AggregateSelector<T> {
   /** Number of matching document rows */
-  count(): number;
+  count(): { type: 'count' };
   /** Count of distinct entries isolated to a property */
-  countDistinct<P extends Paths<T>>(path: P): number;
+  countDistinct<P extends Paths<T>>(path: P): { type: 'countDistinct'; path: P };
   /** Additive sum function applied to numeric fields */
-  sum<P extends Paths<T>>(path: P): PathType<T, P> extends number ? number : never;
+  sum<P extends Paths<T>>(path: P): { type: 'sum'; path: P };
   /** Calculates average computed from queried numeric field rows */
-  avg<P extends Paths<T>>(path: P): PathType<T, P> extends number ? number : never;
+  avg<P extends Paths<T>>(path: P): { type: 'avg'; path: P };
   /** Minimum value recorded in this dataset projection */
-  min<P extends Paths<T>>(path: P): PathType<T, P>;
+  min<P extends Paths<T>>(path: P): { type: 'min'; path: P };
   /** Maximum value recorded in this dataset projection */
-  max<P extends Paths<T>>(path: P): PathType<T, P>;
-  /** Array array of dynamically distinct unique values found */
-  distinct<P extends Paths<T>>(path: P): PathType<T, P>[];
+  max<P extends Paths<T>>(path: P): { type: 'max'; path: P };
+  /** Array of dynamically distinct unique values found */
+  distinct<P extends Paths<T>>(path: P): { type: 'distinct'; path: P };
 }
 
 /**
@@ -143,17 +149,34 @@ export interface QueryResolver<T> {
    */
   orderBy<P extends Paths<T>>(path: P, direction?: 'asc' | 'desc'): QueryResolver<T>;
 
-  /** Retrieves all fields from the document/row. */
-  selectAll(): T[];
+  /** Builds a descriptor that selects all fields. */
+  selectAll(): {
+    conditions: QueryConditions;
+    select: '*';
+    orderBy?: QueryOrderBy[];
+  };
 
-  /** Retrieves specific fields by their property paths. */
-  select<P extends Paths<T>[]>(...paths: [...P]): SelectResult<T, P>[];
+  /** Builds a descriptor that selects specific fields by their property paths. */
+  select<P extends Paths<T>[]>(...paths: [...P]): {
+    conditions: QueryConditions;
+    select: [...P];
+    orderBy?: QueryOrderBy[];
+  };
 
-  /** Applies an aggregate function against the queried records. */
-  select<A>(aggregate: (s: AggregateSelector<T>) => A): A;
+  /** Builds a descriptor with an aggregate function applied to the queried records. */
+  select<A>(aggregate: (s: AggregateSelector<T>) => A): {
+    conditions: QueryConditions;
+    aggregate: A;
+    orderBy?: QueryOrderBy[];
+  };
 
-  /** Retrieves mapped fields along with an aggregate function. */
-  select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): (SelectResult<T, P> & A)[];
+  /** Builds a descriptor with both selected fields and an aggregate function. */
+  select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): {
+    conditions: QueryConditions;
+    select: [...P];
+    aggregate: A;
+    orderBy?: QueryOrderBy[];
+  };
 
   /** Resolves and returns the constructed query conditions tree without executing a select. */
   getConditions(): QueryConditions;

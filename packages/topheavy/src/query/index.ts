@@ -12,5 +12,9 @@ export type {
   NumberCondition,
   DateCondition,
   ArrayCondition,
+  QueryOrderBy,
+  QueryConditions,
+  QueryConditionGroup,
+  QueryConditionLeaf,
 } from './query.types';
 export type { Paths, PathType, LeafKey, SelectResult, PathsWrapper } from './path';

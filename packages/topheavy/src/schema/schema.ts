@@ -28,9 +28,9 @@ const EMAIL_REGEX = /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_+-]@([a-z0-9][a-
 // ── BaseChainBuilder ─────────────────────────────────────────────────
 
 class BaseChainBuilder {
-    validators: ValidatorFn[] = [];
-    constraints: ThConstraint[] = [];
-    isNullable = false;
+    protected validators: ValidatorFn[] = [];
+    readonly constraints: ThConstraint[] = [];
+    readonly isNullable: boolean = false;
     kind: string = 'unknown';
 
     /** @internal phantom — only meaningful at the type level */
@@ -50,7 +50,7 @@ class BaseChainBuilder {
 
     get nullable(): any {
         const clone = this._clone();
-        clone.isNullable = true;
+        (clone as any).isNullable = true;
         return clone;
     }
 
@@ -132,10 +132,6 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
         clone.constraints.push({ name: 'len', args: [n] });
         clone.validators.push((v: any) => v.length === n);
         return clone;
-    }
-
-    length(n: number): this {
-        return this.len(n);
     }
 
     minLen(n: number): this {

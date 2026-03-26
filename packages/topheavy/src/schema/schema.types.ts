@@ -29,10 +29,8 @@ export interface ThStringChain<Null = never> extends ThBaseChain<string, Null> {
     readonly nullable: ThStringChain<null>;
 
     // Length constraints
-    /** Ensures exact length. Alias for {@link length}. */
+    /** Ensures exact length */
     len(n: number): ThStringChain<Null>;
-    /** Ensures exact length. Alias for {@link len}. */
-    length(n: number): ThStringChain<Null>;
     /** Ensures minimum length */
     minLen(n: number): ThStringChain<Null>;
     /** Ensures maximum length */

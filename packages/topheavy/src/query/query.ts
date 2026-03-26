@@ -1,4 +1,4 @@
-import type { Query, QueryConditionLeaf, QueryConditionGroup, QueryConditions } from './query.types'
+import type { Query, QueryConditionLeaf, QueryConditionGroup, QueryConditions, QueryOrderBy } from './query.types'
 
 type ConditionEntry = QueryConditionLeaf | QueryConditionGroup;
 
@@ -17,7 +17,7 @@ class QueryBuilderImpl {
   private _currentGroup: QueryConditionGroup = [];
   private _currentPath: string = '';
   private _negated: boolean = false;
-  private _orderBys: Array<{ path: string; direction: string }> = [];
+  private _orderBys: QueryOrderBy[] = [];
 
   private _finalizeGroup(): void {
     if (this._currentGroup.length > 0) {
@@ -36,6 +36,7 @@ class QueryBuilderImpl {
   // --- Query / Subquery ---
 
   where(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
+    this._negated = false;
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
@@ -56,8 +57,8 @@ class QueryBuilderImpl {
   endsWith(value: string) { return this._addCondition('endsWith', value); }
   greaterThan(value: number) { return this._addCondition('greaterThan', value); }
   lessThan(value: number) { return this._addCondition('lessThan', value); }
-  between(a: unknown, b: unknown, inclusive?: boolean) {
-    return this._addCondition('between', inclusive !== undefined ? [a, b, inclusive] : [a, b]);
+  between(a: unknown, b: unknown) {
+    return this._addCondition('between', [a, b]);
   }
   before(value: Date) { return this._addCondition('before', value); }
   after(value: Date) { return this._addCondition('after', value); }
@@ -75,12 +76,18 @@ class QueryBuilderImpl {
   // --- Same-path chaining (stays in current group) ---
 
   get and(): any {
-    this._currentGroup.push('and');
+    const last = this._currentGroup[this._currentGroup.length - 1];
+    if (this._currentGroup.length > 0 && last !== 'and' && last !== 'or') {
+      this._currentGroup.push('and');
+    }
     return this;
   }
 
   get or(): any {
-    this._currentGroup.push('or');
+    const last = this._currentGroup[this._currentGroup.length - 1];
+    if (this._currentGroup.length > 0 && last !== 'and' && last !== 'or') {
+      this._currentGroup.push('or');
+    }
     return this;
   }
 
@@ -88,6 +95,7 @@ class QueryBuilderImpl {
 
   andWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
+    this._negated = false;
     this._conditions.push('and');
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
@@ -102,6 +110,7 @@ class QueryBuilderImpl {
 
   orWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
+    this._negated = false;
     this._conditions.push('or');
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
@@ -116,7 +125,7 @@ class QueryBuilderImpl {
 
   // --- Resolver methods ---
 
-  orderBy(path: string, direction: string = 'asc'): any {
+  orderBy(path: string, direction: 'asc' | 'desc' = 'asc'): any {
     this._orderBys.push({ path, direction });
     return this;
   }
