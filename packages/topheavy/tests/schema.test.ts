@@ -304,4 +304,224 @@ describe('template constraint', () => {
     expect(withTemplate.validate({ x: 'anything' })).toBe(false);
     expect(withTemplate.validate({ x: 'PREFIX-anything' })).toBe(true);
   });
+
+  describe('len() slot — exact length', () => {
+    const scheme = schema(t => ({ code: t.str.template`INV-${t.str.len(4)}` }));
+
+    it('accepts a slot value of exactly the required length', () => {
+      expect(scheme.validate({ code: 'INV-0001' })).toBe(true);
+      expect(scheme.validate({ code: 'INV-ABCD' })).toBe(true);
+    });
+
+    it('rejects a slot value that is too short', () => {
+      expect(scheme.validate({ code: 'INV-001' })).toBe(false);
+    });
+
+    it('rejects a slot value that is too long', () => {
+      expect(scheme.validate({ code: 'INV-00001' })).toBe(false);
+    });
+  });
+
+  describe('minLen() slot — minimum length', () => {
+    const scheme = schema(t => ({ tag: t.str.template`#${t.str.minLen(3)}` }));
+
+    it('accepts a slot value at the minimum', () => {
+      expect(scheme.validate({ tag: '#abc' })).toBe(true);
+    });
+
+    it('accepts a slot value longer than the minimum', () => {
+      expect(scheme.validate({ tag: '#abcdef' })).toBe(true);
+    });
+
+    it('rejects a slot value below the minimum', () => {
+      expect(scheme.validate({ tag: '#ab' })).toBe(false);
+      expect(scheme.validate({ tag: '#' })).toBe(false);
+    });
+  });
+
+  describe('maxLen() slot — maximum length', () => {
+    const scheme = schema(t => ({ code: t.str.template`ID-${t.str.maxLen(4)}` }));
+
+    it('accepts a slot value at the maximum', () => {
+      expect(scheme.validate({ code: 'ID-1234' })).toBe(true);
+    });
+
+    it('accepts an empty slot value', () => {
+      expect(scheme.validate({ code: 'ID-' })).toBe(true);
+    });
+
+    it('rejects a slot value exceeding the maximum', () => {
+      expect(scheme.validate({ code: 'ID-12345' })).toBe(false);
+    });
+  });
+
+  describe('uppercase() slot', () => {
+    const scheme = schema(t => ({ code: t.str.template`${t.str.uppercase()}-${t.str.uppercase()}` }));
+
+    it('accepts fully uppercase segments', () => {
+      expect(scheme.validate({ code: 'FOO-BAR' })).toBe(true);
+      expect(scheme.validate({ code: 'A-Z' })).toBe(true);
+    });
+
+    it('rejects lowercase letters in either segment', () => {
+      expect(scheme.validate({ code: 'foo-BAR' })).toBe(false);
+      expect(scheme.validate({ code: 'FOO-bar' })).toBe(false);
+    });
+  });
+
+  describe('lowercase() slot', () => {
+    const scheme = schema(t => ({ slug: t.str.template`${t.str.lowercase()}-${t.str.lowercase()}` }));
+
+    it('accepts fully lowercase segments', () => {
+      expect(scheme.validate({ slug: 'foo-bar' })).toBe(true);
+    });
+
+    it('rejects uppercase letters in either segment', () => {
+      expect(scheme.validate({ slug: 'Foo-bar' })).toBe(false);
+      expect(scheme.validate({ slug: 'foo-Bar' })).toBe(false);
+    });
+  });
+
+  describe('beginsWith() slot', () => {
+    const scheme = schema(t => ({ ref: t.str.template`[${t.str.beginsWith('REF')}]` }));
+
+    it('accepts a slot value that starts with the required prefix', () => {
+      expect(scheme.validate({ ref: '[REF001]' })).toBe(true);
+      expect(scheme.validate({ ref: '[REF]' })).toBe(true);
+    });
+
+    it('rejects a slot value without the required prefix', () => {
+      expect(scheme.validate({ ref: '[001]' })).toBe(false);
+      expect(scheme.validate({ ref: '[ref001]' })).toBe(false);
+    });
+  });
+
+  describe('endsWith() slot', () => {
+    const scheme = schema(t => ({ file: t.str.template`${t.str.endsWith('.json')}` }));
+
+    it('accepts a slot value ending with the required suffix', () => {
+      expect(scheme.validate({ file: 'config.json' })).toBe(true);
+      expect(scheme.validate({ file: '.json' })).toBe(true);
+    });
+
+    it('rejects a slot value without the required suffix', () => {
+      expect(scheme.validate({ file: 'config.yaml' })).toBe(false);
+      expect(scheme.validate({ file: 'config.json.bak' })).toBe(false);
+    });
+  });
+
+  describe('contains() slot', () => {
+    const scheme = schema(t => ({ label: t.str.template`${t.str.contains('WARN')}` }));
+
+    it('accepts a slot value containing the required substring', () => {
+      expect(scheme.validate({ label: 'WARN' })).toBe(true);
+      expect(scheme.validate({ label: 'prefix-WARN-suffix' })).toBe(true);
+    });
+
+    it('rejects a slot value missing the required substring', () => {
+      expect(scheme.validate({ label: 'INFO' })).toBe(false);
+      expect(scheme.validate({ label: 'warn' })).toBe(false);
+    });
+  });
+
+  describe('regex() slot', () => {
+    const scheme = schema(t => ({ id: t.str.template`ID-${t.str.regex(/\d{3}/)}` }));
+
+    it('accepts a slot value matching the regex', () => {
+      expect(scheme.validate({ id: 'ID-123' })).toBe(true);
+      expect(scheme.validate({ id: 'ID-000' })).toBe(true);
+    });
+
+    it('rejects a slot value not matching the regex', () => {
+      expect(scheme.validate({ id: 'ID-12' })).toBe(false);
+      expect(scheme.validate({ id: 'ID-abc' })).toBe(false);
+    });
+  });
+
+  describe('email slot', () => {
+    const scheme = schema(t => ({ contact: t.str.template`mailto:${t.str.email}` }));
+
+    it('accepts a valid mailto URI', () => {
+      expect(scheme.validate({ contact: 'mailto:user@example.com' })).toBe(true);
+    });
+
+    it('rejects an invalid email in the slot', () => {
+      expect(scheme.validate({ contact: 'mailto:not-an-email' })).toBe(false);
+    });
+
+    it('rejects a value missing the mailto: prefix', () => {
+      expect(scheme.validate({ contact: 'user@example.com' })).toBe(false);
+    });
+  });
+
+  describe('multiple constraints on one slot (lookahead composition)', () => {
+    const scheme = schema(t => ({
+      code: t.str.template`${t.str.minLen(3).uppercase()}`,
+    }));
+
+    it('accepts a value satisfying both minLen and uppercase', () => {
+      expect(scheme.validate({ code: 'ABC' })).toBe(true);
+      expect(scheme.validate({ code: 'ABCDEF' })).toBe(true);
+    });
+
+    it('rejects a value that is too short even if uppercase', () => {
+      expect(scheme.validate({ code: 'AB' })).toBe(false);
+    });
+
+    it('rejects a value that is long enough but not uppercase', () => {
+      expect(scheme.validate({ code: 'abc' })).toBe(false);
+      expect(scheme.validate({ code: 'Abc' })).toBe(false);
+    });
+  });
+
+  describe('raw string literal as interpolation', () => {
+    it('uses the raw value as a fixed string segment', () => {
+      const prefix = 'ACME';
+      const scheme = schema(t => ({ code: t.str.template`${prefix}-${t.str}` }));
+      expect(scheme.validate({ code: 'ACME-001' })).toBe(true);
+      expect(scheme.validate({ code: 'OTHER-001' })).toBe(false);
+    });
+
+    it('escapes regex special characters in the raw string', () => {
+      const scheme = schema(t => ({ ver: t.str.template`${'v1.0'}-${t.str}` }));
+      expect(scheme.validate({ ver: 'v1.0-rc1' })).toBe(true);
+      expect(scheme.validate({ ver: 'v1X0-rc1' })).toBe(false);
+    });
+  });
+
+  describe('raw number literal as interpolation', () => {
+    it('uses the number as a fixed segment', () => {
+      const scheme = schema(t => ({ code: t.str.template`v${42}-${t.str}` }));
+      expect(scheme.validate({ code: 'v42-beta' })).toBe(true);
+      expect(scheme.validate({ code: 'v43-beta' })).toBe(false);
+    });
+  });
+
+  describe('complex real-world pattern', () => {
+    // Invoice format: INV-<4 uppercase chars>-<3 digits>
+    const scheme = schema(t => ({
+      invoiceRef: t.str.template`INV-${t.str.len(4).uppercase()}-${t.str.regex(/\d{3}/)}`,
+    }));
+
+    it('accepts a well-formed invoice reference', () => {
+      expect(scheme.validate({ invoiceRef: 'INV-ACME-001' })).toBe(true);
+    });
+
+    it('rejects wrong segment lengths', () => {
+      expect(scheme.validate({ invoiceRef: 'INV-ACM-001' })).toBe(false);   // 3 not 4
+      expect(scheme.validate({ invoiceRef: 'INV-ACMEX-001' })).toBe(false); // 5 not 4
+    });
+
+    it('rejects non-uppercase first segment', () => {
+      expect(scheme.validate({ invoiceRef: 'INV-acme-001' })).toBe(false);
+    });
+
+    it('rejects non-digit second segment', () => {
+      expect(scheme.validate({ invoiceRef: 'INV-ACME-abc' })).toBe(false);
+    });
+
+    it('rejects missing separators', () => {
+      expect(scheme.validate({ invoiceRef: 'INVACME001' })).toBe(false);
+    });
+  });
 });

@@ -50,7 +50,7 @@ export interface ThStringChain<Null = never> extends ThBaseChain<string, Null> {
 
     // Tagged template literal
     /** Builds a regex pattern using template literals */
-    template(strings: TemplateStringsArray, ...exprs: any[]): ThStringChain<Null>;
+    template(strings: TemplateStringsArray, ...exprs: (ThStringChain<any> | string | number)[]): ThStringChain<Null>;
 
     // Transforms
     /** Ensures string is purely uppercase */

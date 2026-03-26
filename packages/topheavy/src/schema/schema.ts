@@ -61,6 +61,57 @@ class BaseChainBuilder {
     }
 }
 
+// ── toRegexFragment ───────────────────────────────────────────────────
+
+function escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toRegexFragment(chain: BaseChainBuilder): string {
+    // Char-class and quantifier are merged into a single consuming fragment
+    // (e.g. len(4).uppercase() → [A-Z\s\d\W]{4}) so that the slot boundary
+    // is respected. Other constraints are applied as lookaheads in front.
+    let charClass: string | null = null;
+    let quantifier: string | null = null;
+    const lookaheadFragments: string[] = [];
+
+    for (const c of chain.constraints.filter(c => c.name !== 'template')) {
+        switch (c.name) {
+            case 'len':        quantifier = `{${c.args[0]}}`;       break;
+            case 'minLen':     quantifier = `{${c.args[0]},}`;      break;
+            case 'maxLen':     quantifier = `{0,${c.args[0]}}`;     break;
+            case 'uppercase':  charClass = '[A-Z\\s\\d\\W]';        break;
+            case 'lowercase':  charClass = '[a-z\\s\\d\\W]';        break;
+            case 'beginsWith': lookaheadFragments.push(`${escapeRegex(c.args[0])}.*`);       break;
+            case 'endsWith':   lookaheadFragments.push(`.*${escapeRegex(c.args[0])}`);       break;
+            case 'contains':   lookaheadFragments.push(`.*${escapeRegex(c.args[0])}.*`);    break;
+            case 'regex':      lookaheadFragments.push(`(?:${(c.args[0] as RegExp).source})`); break;
+            // Strip outer anchors so the email pattern embeds cleanly
+            case 'email':      lookaheadFragments.push(EMAIL_REGEX.source.replace(/^\^|\$$/g, '')); break;
+        }
+    }
+
+    // Build the consuming base: char class + quantifier fused into one token
+    const base = charClass !== null
+        ? `${charClass}${quantifier ?? '+'}`   // e.g. [A-Z\s\d\W]{4}
+        : quantifier !== null
+        ? `.${quantifier}`                      // e.g. .{4}
+        : null;
+
+    if (base !== null) {
+        const lookaheads = lookaheadFragments.map(f => `(?=${f})`).join('');
+        return `${lookaheads}${base}`;
+    }
+
+    // No quantifier/charClass — use the last fragment as the consuming pattern
+    // and apply the rest as lookaheads, so positional fragments (endsWith, etc.)
+    // are anchored correctly by the outer template's ^ and $.
+    if (lookaheadFragments.length === 0) return '.*';
+    const last = lookaheadFragments[lookaheadFragments.length - 1];
+    const prefixLookaheads = lookaheadFragments.slice(0, -1).map(f => `(?=${f})`).join('');
+    return `${prefixLookaheads}${last}`;
+}
+
 // ── StringChainBuilder ───────────────────────────────────────────────
 
 class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
@@ -129,13 +180,18 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
         return clone;
     }
 
-    template(strings: TemplateStringsArray, ...exprs: any[]): this {
+    template(strings: TemplateStringsArray, ...exprs: (ThStringChain<any> | string | number)[]): this {
         const clone = this._clone();
         clone.constraints.push({ name: 'template', args: [strings, ...exprs] });
         let pattern = '^';
         for (let i = 0; i < strings.length; i++) {
-            pattern += strings[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            if (i < exprs.length) pattern += '.*';
+            pattern += escapeRegex(strings[i]);
+            if (i < exprs.length) {
+                const expr = exprs[i];
+                pattern += expr instanceof BaseChainBuilder
+                    ? toRegexFragment(expr)
+                    : escapeRegex(String(expr));
+            }
         }
         pattern += '$';
         const regex = new RegExp(pattern);
