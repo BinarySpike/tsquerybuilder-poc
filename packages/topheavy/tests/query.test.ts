@@ -14,9 +14,11 @@ describe('query builder', () => {
     const expectedCondition = [
       [["invoiceNumber", "contains", "5"], "or", ["invoiceNumber", "contains", "7"]],
       "and",
-      [["customer.companyName", "is", "Luna"], "or", ["customer.companyName", "is", "Moon"]],
-      "and",
-      [["customer.id", "in", [1, 2, 3]]]
+      [
+        [["customer.companyName", "is", "Luna"], "or", ["customer.companyName", "is", "Moon"]],
+        "and",
+        [["customer.id", "in", [1, 2, 3]]],
+      ],
     ];
 
     expect(results.getConditions()).toEqual(expectedCondition);

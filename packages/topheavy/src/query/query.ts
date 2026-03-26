@@ -40,7 +40,7 @@ class QueryBuilderImpl {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
       sub._finalizeGroup();
-      this._conditions.push(...sub._conditions);
+      this._conditions.push(sub._conditions);
       return this;
     }
     this._currentPath = pathOrSubquery;
@@ -93,7 +93,7 @@ class QueryBuilderImpl {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
       sub._finalizeGroup();
-      this._conditions.push(...sub._conditions);
+      this._conditions.push(sub._conditions);
       return this;
     }
     this._currentPath = pathOrSubquery;
@@ -107,7 +107,7 @@ class QueryBuilderImpl {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
       sub._finalizeGroup();
-      this._conditions.push(...sub._conditions);
+      this._conditions.push(sub._conditions);
       return this;
     }
     this._currentPath = pathOrSubquery;

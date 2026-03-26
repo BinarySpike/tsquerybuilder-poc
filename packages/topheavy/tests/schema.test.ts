@@ -141,6 +141,21 @@ describe('chain constraint types', () => {
     expect(scheme.validate({ age: 121 })).toBe(false);
   });
 
+  it('validates multipleOf with integers only', () => {
+    const scheme = schema(t => ({
+      count: t.num.multipleOf(3),
+    }));
+
+    expect(scheme.validate({ count: 9 })).toBe(true);
+    expect(scheme.validate({ count: 0 })).toBe(true);
+    expect(scheme.validate({ count: 7 })).toBe(false);
+    expect(scheme.validate({ count: 3.5 })).toBe(false);
+  });
+
+  it('throws on non-integer multipleOf argument', () => {
+    expect(() => schema(t => ({ n: t.num.multipleOf(0.1) }))).toThrow(TypeError);
+  });
+
   it('validates nullable fields', () => {
     const scheme = schema(t => ({
       email: t.str.nullable.email,
@@ -159,6 +174,71 @@ describe('chain constraint types', () => {
     expect(scheme.validate({ status: "active" })).toBe(true);
     expect(scheme.validate({ status: "inactive" })).toBe(true);
     expect(scheme.validate({ status: "deleted" } as any)).toBe(false);
+  });
+});
+
+describe('strict object validation', () => {
+  it('rejects objects with extra keys', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+    }));
+
+    expect(scheme.validate({ name: "hello", age: 25 })).toBe(false);
+    expect(scheme.validate({ name: "hello", foo: "bar", baz: 1 })).toBe(false);
+  });
+
+  it('accepts objects with exactly the schema keys', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      age: t.num,
+    }));
+
+    expect(scheme.validate({ name: "hello", age: 25 })).toBe(true);
+  });
+
+  it('rejects objects with missing non-nullable keys', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      age: t.num,
+    }));
+
+    expect(scheme.validate({ name: "hello" })).toBe(false);
+    expect(scheme.validate({ age: 25 })).toBe(false);
+    expect(scheme.validate({})).toBe(false);
+  });
+
+  it('accepts objects with missing nullable keys', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      nickname: t.str.nullable,
+    }));
+
+    expect(scheme.validate({ name: "hello" })).toBe(true);
+    expect(scheme.validate({ name: "hello", nickname: null })).toBe(true);
+    expect(scheme.validate({ name: "hello", nickname: "hey" })).toBe(true);
+  });
+
+  it('rejects missing keys in nested objects', () => {
+    expect(Address.validate({ number: "1", street: "A", city: "B" })).toBe(false);
+  });
+
+  it('rejects extra keys in nested objects', () => {
+    expect(Address.validate({ number: "1", street: "A", city: "B", zipCode: "12345", extra: true })).toBe(false);
+  });
+
+  it('rejects extra keys in array items', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      customers: t.ref(() => Customer).array,
+    }));
+
+    const invalid = {
+      name: "Corp",
+      customers: [
+        { id: 1, companyName: "A", email: null, address: { number: "1", street: "A", city: "B", zipCode: "12345" }, extra: "field" },
+      ],
+    };
+    expect(scheme.validate(invalid)).toBe(false);
   });
 });
 

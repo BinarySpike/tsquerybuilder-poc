@@ -47,7 +47,7 @@ class BaseChainBuilder {
         return this.validators.every(fn => fn(value));
     }
 
-    get nullable(): this {
+    get nullable(): any {
         const clone = this._clone();
         clone.isNullable = true;
         return clone;
@@ -71,8 +71,8 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
         this.validators.push((v: any) => typeof v === 'string');
     }
 
-    override get nullable(): ThStringChain<null> {
-        return super.nullable as ThStringChain<null>;
+    get nullable(): ThStringChain<null> {
+        return super.nullable as unknown as ThStringChain<null>;
     }
 
     len(n: number): this {
@@ -83,10 +83,7 @@ class StringChainBuilder extends BaseChainBuilder implements ThStringChain {
     }
 
     length(n: number): this {
-        const clone = this._clone();
-        clone.constraints.push({ name: 'length', args: [n] });
-        clone.validators.push((v: any) => v.length === n);
-        return clone;
+        return this.len(n);
     }
 
     minLen(n: number): this {
@@ -178,8 +175,8 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
         this.validators.push((v: any) => typeof v === 'number' && !Number.isNaN(v));
     }
 
-    override get nullable(): ThNumberChain<null> {
-        return super.nullable as ThNumberChain<null>;
+    get nullable(): ThNumberChain<null> {
+        return super.nullable as unknown as ThNumberChain<null>;
     }
 
     gt(n: number): this {
@@ -211,9 +208,10 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
     }
 
     multipleOf(n: number): this {
+        if (!Number.isInteger(n)) throw new TypeError('multipleOf requires an integer argument');
         const clone = this._clone();
         clone.constraints.push({ name: 'multipleOf', args: [n] });
-        clone.validators.push((v: any) => v % n === 0);
+        clone.validators.push((v: any) => Number.isInteger(v) && v % n === 0);
         return clone;
     }
 
@@ -243,8 +241,8 @@ class BigIntChainBuilder extends BaseChainBuilder implements ThBigIntChain {
         this.validators.push((v: any) => typeof v === 'bigint');
     }
 
-    override get nullable(): ThBigIntChain<null> {
-        return super.nullable as ThBigIntChain<null>;
+    get nullable(): ThBigIntChain<null> {
+        return super.nullable as unknown as ThBigIntChain<null>;
     }
 
     gt(n: bigint): this {
@@ -294,8 +292,8 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
         this.validators.push((v: any) => v instanceof Date && !Number.isNaN(v.valueOf()));
     }
 
-    override get nullable(): ThDateChain<null> {
-        return super.nullable as ThDateChain<null>;
+    get nullable(): ThDateChain<null> {
+        return super.nullable as unknown as ThDateChain<null>;
     }
 
     gt(d: Date): this {
@@ -352,8 +350,8 @@ class BooleanChainBuilder extends BaseChainBuilder implements ThBooleanChain {
         this.validators.push((v: any) => typeof v === 'boolean');
     }
 
-    override get nullable(): ThBooleanChain<null> {
-        return super.nullable as ThBooleanChain<null>;
+    get nullable(): ThBooleanChain<null> {
+        return super.nullable as unknown as ThBooleanChain<null>;
     }
 }
 
@@ -366,8 +364,8 @@ class SymbolChainBuilder extends BaseChainBuilder implements ThSymbolChain {
         this.validators.push((v: any) => typeof v === 'symbol');
     }
 
-    override get nullable(): ThSymbolChain<null> {
-        return super.nullable as ThSymbolChain<null>;
+    get nullable(): ThSymbolChain<null> {
+        return super.nullable as unknown as ThSymbolChain<null>;
     }
 }
 
@@ -380,8 +378,8 @@ class UndefinedChainBuilder extends BaseChainBuilder implements ThUndefinedChain
         this.validators.push((v: any) => typeof v === 'undefined');
     }
 
-    override get nullable(): ThUndefinedChain<null> {
-        return super.nullable as ThUndefinedChain<null>;
+    get nullable(): ThUndefinedChain<null> {
+        return super.nullable as unknown as ThUndefinedChain<null>;
     }
 }
 
@@ -394,8 +392,8 @@ class NullChainBuilder extends BaseChainBuilder implements ThNullChain {
         this.validators.push((v: any) => v === null);
     }
 
-    override get nullable(): ThNullChain<null> {
-        return super.nullable as ThNullChain<null>;
+    get nullable(): ThNullChain<null> {
+        return super.nullable as unknown as ThNullChain<null>;
     }
 }
 
@@ -483,10 +481,25 @@ class TypeDefinitionImpl implements TypeDefinition {
 
     private _validateObject(value: any): boolean {
         if (typeof value !== 'object' || value === null) return false;
+
+        const schemaKeys = new Set(Object.keys(this.schema));
+
+        // Reject extra keys not defined in the schema
+        for (const key of Object.keys(value)) {
+            if (!schemaKeys.has(key)) return false;
+        }
+
+        // Validate each schema-defined field
         for (const [key, chain] of Object.entries(this.schema)) {
-            if ('validate' in chain && typeof chain.validate === 'function') {
-                if (!chain.validate(value[key])) return false;
+            if (!('validate' in chain && typeof chain.validate === 'function')) continue;
+
+            if (!(key in value)) {
+                // Missing key: only allowed if the field is nullable
+                if (chain instanceof BaseChainBuilder && chain.isNullable) continue;
+                return false;
             }
+
+            if (!chain.validate(value[key])) return false;
         }
         return true;
     }
