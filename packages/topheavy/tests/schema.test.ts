@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { schema } from '../src/schema';
 import type { ThStringChain } from '../src/schema/schema.types';
-import { Customer, Business, Invoice, Address } from './testData.ts';
+import { Customer, Business, Invoice, Address, LineItem } from './testData.ts';
 
 describe('schema() schema definition and validation', () => {
   describe('Business schema', () => {
@@ -174,6 +174,301 @@ describe('chain constraint types', () => {
     expect(scheme.validate({ status: "active" })).toBe(true);
     expect(scheme.validate({ status: "inactive" })).toBe(true);
     expect(scheme.validate({ status: "deleted" } as any)).toBe(false);
+  });
+});
+
+describe('ref type', () => {
+  describe('basic ref validation', () => {
+    it('validates a correct ref field', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ address: { number: '1', street: 'A', city: 'B', zipCode: '12345' } })).toBe(true);
+    });
+
+    it('rejects a ref field with wrong inner type', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ address: { number: 1, street: 'A', city: 'B', zipCode: '12345' } } as any)).toBe(false);
+    });
+
+    it('rejects a ref field that is a primitive', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ address: 'not an object' } as any)).toBe(false);
+      expect(scheme.validate({ address: 42 } as any)).toBe(false);
+      expect(scheme.validate({ address: null } as any)).toBe(false);
+    });
+
+    it('rejects a missing (required) ref field', () => {
+      const scheme = schema(t => ({
+        name: t.str,
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ name: 'Alice' })).toBe(false);
+    });
+
+    it('rejects extra keys inside a ref schema', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ address: { number: '1', street: 'A', city: 'B', zipCode: '12345', extra: true } } as any)).toBe(false);
+    });
+
+    it('rejects missing keys inside a ref schema', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.validate({ address: { number: '1', street: 'A', city: 'B' } } as any)).toBe(false);
+    });
+  });
+
+  describe('ref array', () => {
+    it('validates an empty array', () => {
+      const scheme = schema(t => ({ items: t.ref(() => LineItem).array }));
+      expect(scheme.validate({ items: [] })).toBe(true);
+    });
+
+    it('validates an array with valid items', () => {
+      const scheme = schema(t => ({ items: t.ref(() => LineItem).array }));
+      expect(scheme.validate({ items: [
+        { description: 'Widget', quantity: 2, unitPrice: 5 },
+        { description: 'Gadget', quantity: 1, unitPrice: 20 },
+      ] })).toBe(true);
+    });
+
+    it('rejects an array containing an invalid item', () => {
+      const scheme = schema(t => ({ items: t.ref(() => LineItem).array }));
+      expect(scheme.validate({ items: [
+        { description: 'Widget', quantity: 'two', unitPrice: 5 },
+      ] } as any)).toBe(false);
+    });
+
+    it('rejects a non-array value for an array ref', () => {
+      const scheme = schema(t => ({ items: t.ref(() => LineItem).array }));
+      expect(scheme.validate({ items: { description: 'Widget', quantity: 1, unitPrice: 5 } } as any)).toBe(false);
+    });
+
+    it('rejects extra keys in array ref items', () => {
+      const scheme = schema(t => ({ items: t.ref(() => LineItem).array }));
+      expect(scheme.validate({ items: [
+        { description: 'Widget', quantity: 1, unitPrice: 5, extra: true },
+      ] } as any)).toBe(false);
+    });
+  });
+
+  describe('nested refs (ref within ref)', () => {
+    it('validates deeply nested refs', () => {
+      expect(Customer.validate({
+        id: 1,
+        companyName: 'Acme',
+        email: null,
+        address: { number: '1', street: 'Main', city: 'Springfield', zipCode: '12345' },
+      })).toBe(true);
+    });
+
+    it('rejects an invalid deeply nested ref field', () => {
+      expect(Customer.validate({
+        id: 1,
+        companyName: 'Acme',
+        email: null,
+        address: { number: '1', street: 'Main', city: 'Springfield', zipCode: '123' }, // zipCode too short
+      } as any)).toBe(false);
+    });
+
+    it('rejects null for a non-nullable nested ref', () => {
+      expect(Customer.validate({
+        id: 1,
+        companyName: 'Acme',
+        email: null,
+        address: null,
+      } as any)).toBe(false);
+    });
+  });
+
+  describe('ref.schema introspection', () => {
+    it('exposes the inner schema via .schema', () => {
+      const scheme = schema(t => ({
+        address: t.ref(() => Address),
+      }));
+      expect(scheme.schema.address.schema).toBe(Address.schema);
+    });
+  });
+});
+
+describe('primitive arrays', () => {
+  it('validates an array of strings', () => {
+    const scheme = schema(t => ({ tags: t.str.array }));
+    expect(scheme.validate({ tags: ['a', 'b', 'c'] })).toBe(true);
+    expect(scheme.validate({ tags: [] })).toBe(true);
+  });
+
+  it('rejects a non-array value', () => {
+    const scheme = schema(t => ({ tags: t.str.array }));
+    expect(scheme.validate({ tags: 'not-an-array' } as any)).toBe(false);
+  });
+
+  it('rejects an array with wrong element type', () => {
+    const scheme = schema(t => ({ tags: t.str.array }));
+    expect(scheme.validate({ tags: [1, 2, 3] } as any)).toBe(false);
+  });
+
+  it('applies element constraints — t.str.array.minLen(3)', () => {
+    const scheme = schema(t => ({ tags: t.str.array.minLen(3) }));
+    expect(scheme.validate({ tags: ['abc', 'defg'] })).toBe(true);
+    expect(scheme.validate({ tags: ['ab'] } as any)).toBe(false);
+  });
+
+  it('applies element constraints — t.num.array.gt(0)', () => {
+    const scheme = schema(t => ({ scores: t.num.array.gt(0) }));
+    expect(scheme.validate({ scores: [1, 2, 3] })).toBe(true);
+    expect(scheme.validate({ scores: [1, 0, 3] } as any)).toBe(false);
+  });
+
+  it('applies element constraints — t.str.array.len(5)', () => {
+    const scheme = schema(t => ({ codes: t.str.array.len(5) }));
+    expect(scheme.validate({ codes: ['ABCDE', '12345'] })).toBe(true);
+    expect(scheme.validate({ codes: ['ABCD'] } as any)).toBe(false);
+    expect(scheme.validate({ codes: ['ABCDEF'] } as any)).toBe(false);
+  });
+
+  it('supports nullable element chains — t.str.nullable.array', () => {
+    const scheme = schema(t => ({ tags: t.str.nullable.array }));
+    expect(scheme.validate({ tags: ['a', null, 'b'] })).toBe(true);
+    expect(scheme.validate({ tags: [1] } as any)).toBe(false);
+  });
+
+  it('supports nullable array — t.str.array.nullable', () => {
+    const scheme = schema(t => ({ tags: t.str.array.nullable }));
+    expect(scheme.validate({ tags: null })).toBe(true);
+    expect(scheme.validate({ tags: ['a', 'b'] })).toBe(true);
+    expect(scheme.validate({})).toBe(true);
+  });
+
+  it('validates array of numbers with multiple constraints', () => {
+    const scheme = schema(t => ({ values: t.num.array.gte(0).lte(100) }));
+    expect(scheme.validate({ values: [0, 50, 100] })).toBe(true);
+    expect(scheme.validate({ values: [-1, 50] } as any)).toBe(false);
+    expect(scheme.validate({ values: [50, 101] } as any)).toBe(false);
+  });
+});
+
+describe('inline nested objects', () => {
+  it('validates a correct nested object', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: {
+        street: t.str,
+        city: t.str,
+      },
+    }));
+    expect(scheme.validate({ name: 'Alice', address: { street: 'Main', city: 'Springfield' } })).toBe(true);
+  });
+
+  it('rejects a missing required nested object', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: {
+        street: t.str,
+        city: t.str,
+      },
+    }));
+    expect(scheme.validate({ name: 'Alice' })).toBe(false);
+  });
+
+  it('rejects a wrong type inside a nested object', () => {
+    const scheme = schema(t => ({
+      address: {
+        street: t.str,
+        number: t.num,
+      },
+    }));
+    expect(scheme.validate({ address: { street: 'Main', number: 'not a number' } } as any)).toBe(false);
+  });
+
+  it('rejects extra keys inside a nested object', () => {
+    const scheme = schema(t => ({
+      address: {
+        street: t.str,
+      },
+    }));
+    expect(scheme.validate({ address: { street: 'Main', extra: true } } as any)).toBe(false);
+  });
+
+  it('rejects missing keys inside a nested object', () => {
+    const scheme = schema(t => ({
+      address: {
+        street: t.str,
+        city: t.str,
+      },
+    }));
+    expect(scheme.validate({ address: { street: 'Main' } } as any)).toBe(false);
+  });
+
+  it('validates deeply nested objects', () => {
+    const scheme = schema(t => ({
+      org: {
+        location: {
+          city: t.str,
+          zip: t.str.len(5),
+        },
+      },
+    }));
+    expect(scheme.validate({ org: { location: { city: 'Springfield', zip: '12345' } } })).toBe(true);
+    expect(scheme.validate({ org: { location: { city: 'Springfield', zip: '123' } } } as any)).toBe(false);
+  });
+
+  it('validates a nested object field with constraints', () => {
+    const scheme = schema(t => ({
+      user: {
+        name: t.str.minLen(3),
+        age: t.num.gte(0),
+      },
+    }));
+    expect(scheme.validate({ user: { name: 'Alice', age: 30 } })).toBe(true);
+    expect(scheme.validate({ user: { name: 'Al', age: 30 } } as any)).toBe(false);
+    expect(scheme.validate({ user: { name: 'Alice', age: -1 } } as any)).toBe(false);
+  });
+});
+
+describe('nullable ref fields', () => {
+  it('allows a nullable ref field to be absent', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: t.ref(() => Address).nullable,
+    }));
+
+    expect(scheme.validate({ name: 'Alice' })).toBe(true);
+  });
+
+  it('allows a nullable ref field to be null', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: t.ref(() => Address).nullable,
+    }));
+
+    expect(scheme.validate({ name: 'Alice', address: null })).toBe(true);
+  });
+
+  it('still validates the ref when present', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: t.ref(() => Address).nullable,
+    }));
+
+    expect(scheme.validate({ name: 'Alice', address: { number: '1', street: 'A', city: 'B', zipCode: '12345' } })).toBe(true);
+    expect(scheme.validate({ name: 'Alice', address: { number: 1, street: 'A', city: 'B', zipCode: '12345' } } as any)).toBe(false);
+  });
+
+  it('requires a non-nullable ref field', () => {
+    const scheme = schema(t => ({
+      name: t.str,
+      address: t.ref(() => Address),
+    }));
+
+    expect(scheme.validate({ name: 'Alice' })).toBe(false);
   });
 });
 

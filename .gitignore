@@ -1,3 +1,4 @@
 node_modules/
 dist/
 cache/
+apps/website/docs/api

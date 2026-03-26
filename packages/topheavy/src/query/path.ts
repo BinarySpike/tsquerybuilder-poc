@@ -26,12 +26,3 @@ export type PathType<T, P extends string> =
             PathType<T[Key], Rest>
     : never
     : P extends keyof T ? T[P] : never;
-
-// Extract the last segment of a dotted path string
-export type LeafKey<P extends string> =
-    P extends `${string}.${infer Rest}` ? LeafKey<Rest> : P;
-
-// Build a result type from a tuple of paths
-export type SelectResult<T, P extends string[]> = {
-    [K in P[number]]: PathType<T, K>
-};

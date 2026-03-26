@@ -30,7 +30,7 @@ export interface Query<T> {
    * Initializes a subquery block for grouped conditions.
    * @param subquery - A callback containing the subquery statements.
    */
-  where<P extends Paths<T>>(subquery: (qb: Subquery<T>) => ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>>): ChainedQuery<T, PathType<T, P>, QueryResolver<T>> & QueryResolver<T>;
+  where<R extends ChainedQuery<T, any, EmptyQueryResolver<T>>>(subquery: (qb: Subquery<T>) => R): R extends ChainedQuery<T, infer V, any> ? ChainedQuery<T, V, QueryResolver<T>> & QueryResolver<T> : never;
 }
 
 /**
@@ -41,7 +41,7 @@ export interface Subquery<T> {
   /** Target a path for a condition */
   where<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>> & EmptyQueryResolver<T>>;
   /** Create a nested subquery */
-  where<P extends Paths<T>>(subquery: (qb: Subquery<T>) => ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>>): ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>> & EmptyQueryResolver<T>;
+  where<R extends ChainedQuery<T, any, EmptyQueryResolver<T>>>(subquery: (qb: Subquery<T>) => R): R extends ChainedQuery<T, infer V, any> ? ChainedQuery<T, V, EmptyQueryResolver<T>> & EmptyQueryResolver<T> : never;
 }
 
 /** General equality methods applicable to any field */
@@ -107,11 +107,11 @@ export interface ChainedQuery<T, V, R> {
   /** Chains a new condition against a different path with `AND` */
   andWhere<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, R> & R>;
   /** Safely starts a subquery group separated by `AND` */
-  andWhere<P extends Paths<T>>(subquery: (qb: Subquery<T>) => ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>>): ChainedQuery<T, PathType<T, P>, R> & R;
+  andWhere<S extends ChainedQuery<T, any, EmptyQueryResolver<T>>>(subquery: (qb: Subquery<T>) => S): S extends ChainedQuery<T, infer W, any> ? ChainedQuery<T, W, R> & R : never;
   /** Chains a new condition against a different path with `OR` */
   orWhere<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, R> & R>;
   /** Safely starts a subquery group separated by `OR` */
-  orWhere<P extends Paths<T>>(subquery: (qb: Subquery<T>) => ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>>): ChainedQuery<T, PathType<T, P>, R> & R;
+  orWhere<S extends ChainedQuery<T, any, EmptyQueryResolver<T>>>(subquery: (qb: Subquery<T>) => S): S extends ChainedQuery<T, infer W, any> ? ChainedQuery<T, W, R> & R : never;
   /** Chains additional conditions on the SAME active path with `AND` */
   and: Condition<V, ChainedQuery<T, V, R> & R>;
   /** Chains additional conditions on the SAME active path with `OR` */

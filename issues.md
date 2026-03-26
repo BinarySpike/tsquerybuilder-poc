@@ -1,41 +1,97 @@
-Bugs / Correctness
+# Issues
 
-3. and/or getters can produce malformed condition groups (query.ts:77-85)
-Calling .and or .or at the start of a new path (before any condition on that path) pushes 'and'/'or' at the front of an empty group. E.g., .andWhere('age').and.lessThan(65) would produce ['and', ['age', 'lessThan', 65]] — a group starting with a logical operator, which is malformed.
+## 1. `PathType` wraps array element types in `[]`, breaking query condition resolution
 
-Similarly, .not sets _negated = true on the instance permanently until a condition method is called. If the user accesses .not without immediately chaining a condition (e.g., stores the query mid-chain), it silently leaks into the next condition.
+**File:** [path.ts:24-25](packages/topheavy/src/query/path.ts#L24-L25)
 
-4. Nested schema fields can never be optional (schema.ts:543-546)
+When traversing through an array field, `PathType` returns `T[]` instead of `T`. For example, given an `Invoice` with `items: LineItem[]`, the path `items.description` resolves to `string[]` instead of `string`. This means the query condition type for that path is `Condition<string[], R>`, which offers `ArrayCondition` methods (`has`, `hasSome`, `hasEvery`) instead of `StringCondition` methods (`beginsWith`, `contains`, etc.).
 
-if (!(key in value)) {
-    if (chain instanceof BaseChainBuilder && chain.isNullable) continue;
-    return false;
-}
-Only BaseChainBuilder fields (leaf types) can be absent via .nullable. TypeDefinitionImpl and RefTypeDefinition nested schemas are always required. There's no way to mark a nested object field as optional.
+In most query languages, filtering on `items.description` means matching against individual element values, not the array as a whole.
 
-Type Safety
-5. P type parameter in subquery where overloads is unresolvable (query.types.ts:33, query.types.ts:44)
+```typescript
+// Current behavior:
+query<InvoiceType>().where('items.description') // → Condition<string[], ...> (array methods)
 
-where<P extends Paths<T>>(subquery: (qb: Subquery<T>) => ChainedQuery<T, PathType<T, P>, EmptyQueryResolver<T>>): ...
-P is only present in the return type of the callback, so TypeScript can't meaningfully infer it from a call site. It defaults to Paths<T> (the union of all paths), which defeats the purpose of carrying a specific V type through the chain after a subquery overload.
+// Expected behavior for element-level querying:
+query<InvoiceType>().where('items.description') // → Condition<string, ...> (string methods)
+```
 
-6. Silent validate skip in _validateObject (schema.ts:540-541)
+---
 
-if (!('validate' in chain && typeof chain.validate === 'function')) continue;
-This silently skips schema fields that don't have a validate method, meaning those fields are never validated. Given that all ValidThField types do have validate, this is unreachable in normal usage, but it could mask bugs if unexpected values end up in a schema definition.
+## 2. No `BigIntCondition` in query module
 
-Documentation / Typos
-7. Doubled "array" in two doc comments
-query.types.ts:137: "Array array of dynamically distinct unique values found"
-schema.types.ts:171: "Promotes this type into an array array-type validation."
-8. JSDoc example uses t.string() but it's a getter (schema.ts:587-591)
+**File:** [query.types.ts:97-101](packages/topheavy/src/query/query.types.ts#L97-L101)
 
-* const userSchema = schema(t => ({
-*   name: t.string().minLen(3),   // ❌ string is a getter, not a method
-*   age: t.number().gte(18)       // ❌ same
-Should be t.string.minLen(3) and t.number.gte(18).
+The `Condition` type maps `string`, `number`, `Date`, and arrays to specialized condition interfaces, but `bigint` fields only get `BaseCondition` (i.e., `is()`, `in()`, `not`). There are no `greaterThan`, `lessThan`, or `between` operators available for bigint-typed paths, despite the schema module fully supporting bigint constraints (`gt`, `lt`, `gte`, `lte`, `multipleOf`).
 
-Minor Design Notes
-No array primitive: Arrays can only be defined via t.ref(() => SomeSchema).array. There's no t.array(t.str) for arrays of primitives, which is a usability gap.
-Builder is not reusable: QueryBuilderImpl is stateful and single-use. Once selectAll()/select() is called, the builder can't be branched or reused. This is a common design choice but worth documenting.
-DateChain has both gt/lt/gte/lte AND min/max (schema.ts:346-386): min and max are aliases for gte and lte respectively. The duplication is minor but may confuse users about which to prefer.
+---
+
+## 4. `multipleOf` implicitly constrains to integers, not just multiples
+
+**File:** [schema.ts:325](packages/topheavy/src/schema/schema.ts#L325)
+
+```typescript
+clone.validators.push((v: any) => Number.isInteger(v) && v % n === 0);
+```
+
+The validator requires `Number.isInteger(v)`, so `t.num.multipleOf(5)` rejects `10.0` on engines where `Number.isInteger(10.0)` is `true` (which is actually all JS engines — `10.0 === 10`). However, it does reject `7.5` even though `7.5 % 2.5 === 0`. The name `multipleOf` suggests it should only check divisibility, but the integer guard makes it also a de facto `isInteger` check. The constructor also throws on non-integer arguments, so `multipleOf(0.5)` is impossible despite being mathematically valid.
+
+---
+
+## 6. Inline nested objects cannot be nullable
+
+**File:** [schema.ts:584-605](packages/topheavy/src/schema/schema.ts#L584-L605)
+
+When a field is defined using inline object syntax, `TypeDefinitionImpl` is created for it, but `TypeDefinitionImpl` has no `isNullable` property. The `_validateObject` loop at line 598 checks `chain.isNullable` for missing keys, but a `TypeDefinitionImpl` field will always fail that check, making inline nested objects implicitly required with no way to make them optional.
+
+```typescript
+// No way to make this optional:
+const s = schema(t => ({
+  address: {        // always required — no .nullable available
+    street: t.str,
+    city: t.str,
+  },
+}));
+```
+
+Workaround: use `t.ref()` instead of inline objects when nullability is needed.
+
+---
+
+## 9. Query builder has no runtime guard against calling `where()` multiple times
+
+**File:** [query.ts:44-55](packages/topheavy/src/query/query.ts#L44-L55)
+
+The type system correctly restricts `where()` to a single initial call (the return type doesn't include `where`). However, at runtime nothing prevents:
+
+```typescript
+const q = query<T>() as any;
+q.where('a').is(1);
+q.where('b').is(2); // silently continues in same group — both conditions end up together
+```
+
+Since the builder is used internally and could be exposed in subquery callbacks, a runtime check or explicit state transition would make the single-call contract more robust.
+
+---
+
+## 10. `toRegexFragment` output depends on constraint insertion order
+
+**File:** [schema.ts:164-170](packages/topheavy/src/schema/schema.ts#L164-L170)
+
+When there's no quantifier/charClass and multiple lookahead fragments exist, the last fragment becomes the consuming pattern and all others become lookaheads. This means the regex structure changes depending on whether you write `.beginsWith('A').endsWith('Z')` vs `.endsWith('Z').beginsWith('A')`. Both produce functionally equivalent regexes in most cases, but the behavior is implicit and could lead to subtle bugs if a future constraint depends on the consuming vs lookahead distinction.
+
+---
+
+## 11. Proxy in `PrimitiveArrayChainBuilder` leaks element chain internals
+
+**File:** [schema.ts:80-100](packages/topheavy/src/schema/schema.ts#L80-L100)
+
+The Proxy `get` trap falls through to `return elementVal` (line 98) for any property that isn't on `target`, isn't a function, and isn't a `BaseChainBuilder` instance. This means accessing properties like `.validators` on an array chain returns the element chain's internal validator array, leaking implementation details.
+
+---
+
+## 12. No validation error context — `validate()` returns only `boolean`
+
+**Files:** [schema.ts:46-49](packages/topheavy/src/schema/schema.ts#L46-L49), [schema.ts:576-582](packages/topheavy/src/schema/schema.ts#L576-L582)
+
+All `validate()` methods return `true`/`false` with no information about which field failed or why. For schemas with many fields or deep nesting, debugging validation failures requires manual bisection. Consider a companion method (e.g., `validateWithErrors()`) that returns structured error information.

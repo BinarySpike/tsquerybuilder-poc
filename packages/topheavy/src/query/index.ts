@@ -17,4 +17,4 @@ export type {
   QueryConditionGroup,
   QueryConditionLeaf,
 } from './query.types';
-export type { Paths, PathType, LeafKey, SelectResult, PathsWrapper } from './path';
+export type { Paths, PathType, PathsWrapper } from './path';

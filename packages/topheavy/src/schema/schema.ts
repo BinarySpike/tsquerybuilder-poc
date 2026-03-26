@@ -59,6 +59,64 @@ class BaseChainBuilder {
         clone.validators.push(fn);
         return clone;
     }
+
+    get array(): any {
+        return new PrimitiveArrayChainBuilder(this);
+    }
+}
+
+// ── PrimitiveArrayChainBuilder ────────────────────────────────────────
+
+class PrimitiveArrayChainBuilder {
+    private _elementChain: BaseChainBuilder;
+    readonly isNullable: boolean;
+    private _arrayValidators: ValidatorFn[] = [];
+
+    constructor(elementChain: BaseChainBuilder, isNullable = false, arrayValidators: ValidatorFn[] = []) {
+        this._elementChain = elementChain;
+        this.isNullable = isNullable;
+        this._arrayValidators = arrayValidators;
+
+        return new Proxy(this, {
+            get(target, prop, receiver) {
+                if (typeof prop === 'symbol' || prop in target) {
+                    return Reflect.get(target, prop, receiver);
+                }
+                const elementVal = (target._elementChain as any)[prop];
+                if (typeof elementVal === 'function') {
+                    return (...args: any[]) => {
+                        const result = elementVal.apply(target._elementChain, args);
+                        if (result instanceof BaseChainBuilder) {
+                            return new PrimitiveArrayChainBuilder(result, target.isNullable, target._arrayValidators);
+                        }
+                        return result;
+                    };
+                }
+                if (elementVal instanceof BaseChainBuilder) {
+                    return new PrimitiveArrayChainBuilder(elementVal, target.isNullable, target._arrayValidators);
+                }
+                return elementVal;
+            }
+        });
+    }
+
+    get kind(): string { return `${this._elementChain.kind}[]`; }
+    get constraints() { return this._elementChain.constraints; }
+
+    get nullable(): this {
+        return new PrimitiveArrayChainBuilder(this._elementChain, true, this._arrayValidators) as this;
+    }
+
+    test(fn: ValidatorFn): this {
+        return new PrimitiveArrayChainBuilder(this._elementChain, this.isNullable, [...this._arrayValidators, fn]) as this;
+    }
+
+    validate(value: any): boolean {
+        if (this.isNullable && (value === null || value === undefined)) return true;
+        if (!Array.isArray(value)) return false;
+        if (!this._arrayValidators.every(fn => fn(value))) return false;
+        return value.every((el: any) => this._elementChain.validate(el));
+    }
 }
 
 // ── toRegexFragment ───────────────────────────────────────────────────
@@ -268,13 +326,6 @@ class NumberChainBuilder extends BaseChainBuilder implements ThNumberChain {
         return clone;
     }
 
-    get unsigned(): this {
-        const clone = this._clone();
-        clone.constraints.push({ name: 'unsigned', args: [] });
-        clone.validators.push((v: any) => v >= 0);
-        return clone;
-    }
-
 }
 
 // ── BigIntChainBuilder ───────────────────────────────────────────────
@@ -371,19 +422,6 @@ class DateChainBuilder extends BaseChainBuilder implements ThDateChain {
         return clone;
     }
 
-    min(d: Date): this {
-        const clone = this._clone();
-        clone.constraints.push({ name: 'min', args: [d] });
-        clone.validators.push((v: any) => v >= d);
-        return clone;
-    }
-
-    max(d: Date): this {
-        const clone = this._clone();
-        clone.constraints.push({ name: 'max', args: [d] });
-        clone.validators.push((v: any) => v <= d);
-        return clone;
-    }
 }
 
 // ── Simple chain builders ────────────────────────────────────────────
@@ -464,10 +502,12 @@ class RefTypeDefinition {
     private _resolve: () => any;
     private _resolved: TypeDefinitionImpl | null = null;
     private _isArray: boolean;
+    readonly isNullable: boolean;
 
-    constructor(resolve: () => any, isArray = false) {
+    constructor(resolve: () => any, isArray = false, isNullable = false) {
         this._resolve = resolve;
         this._isArray = isArray;
+        this.isNullable = isNullable;
     }
 
     private _get(): TypeDefinitionImpl {
@@ -478,18 +518,23 @@ class RefTypeDefinition {
     }
 
     get array(): RefTypeDefinition {
-        return new RefTypeDefinition(this._resolve, true);
+        return new RefTypeDefinition(this._resolve, true, this.isNullable);
+    }
+
+    get nullable(): RefTypeDefinition {
+        return new RefTypeDefinition(this._resolve, this._isArray, true);
     }
 
     get infer(): any {
         return undefined; // phantom — only meaningful at the type level
     }
 
-    get schema(): Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> {
+    get schema(): Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition | PrimitiveArrayChainBuilder> {
         return this._get().schema;
     }
 
     validate(value: any): boolean {
+        if (this.isNullable && (value === null || value === undefined)) return true;
         const inner = this._get();
         if (this._isArray) {
             if (!Array.isArray(value)) return false;
@@ -502,11 +547,21 @@ class RefTypeDefinition {
 // ── TypeDefinitionImpl ───────────────────────────────────────────────
 
 class TypeDefinitionImpl implements TypeDefinition {
-    readonly schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition>;
+    readonly schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition | PrimitiveArrayChainBuilder>;
     private _isArray: boolean;
 
-    constructor(schema: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition> = {}, isArray = false) {
-        this.schema = schema;
+    constructor(schema: Record<string, any> = {}, isArray = false) {
+        const built: Record<string, BaseChainBuilder | TypeDefinitionImpl | RefTypeDefinition | PrimitiveArrayChainBuilder> = {};
+        for (const [key, value] of Object.entries(schema)) {
+            if (value instanceof BaseChainBuilder || value instanceof TypeDefinitionImpl || value instanceof RefTypeDefinition || value instanceof PrimitiveArrayChainBuilder) {
+                built[key] = value;
+            } else if (typeof value === 'object' && value !== null) {
+                built[key] = new TypeDefinitionImpl(value);
+            } else {
+                throw new TypeError(`Schema field "${key}" is not a valid field type`);
+            }
+        }
+        this.schema = built;
         this._isArray = isArray;
     }
 
@@ -538,11 +593,9 @@ class TypeDefinitionImpl implements TypeDefinition {
 
         // Validate each schema-defined field
         for (const [key, chain] of Object.entries(this.schema)) {
-            if (!('validate' in chain && typeof chain.validate === 'function')) continue;
-
             if (!(key in value)) {
                 // Missing key: only allowed if the field is nullable
-                if (chain instanceof BaseChainBuilder && chain.isNullable) continue;
+                if ((chain instanceof BaseChainBuilder || chain instanceof RefTypeDefinition || chain instanceof PrimitiveArrayChainBuilder) && chain.isNullable) continue;
                 return false;
             }
 
@@ -587,12 +640,12 @@ function createThType(): ThType {
  * @example
  * ```ts
  * const userSchema = schema(t => ({
- *   name: t.string().minLen(3),
- *   age: t.number().gte(18)
+ *   name: t.string.minLen(3),
+ *   age: t.number.gte(18)
  * }));
  * ```
  */
-export function schema<S extends Record<string, ValidThField> | void>(
+export function schema<S extends Record<string, ValidThField>>(
     cb: (t: ThType) => S
 ): TypeDefinition<
     S extends Record<string, ValidThField> ? InferSchema<S> : unknown,

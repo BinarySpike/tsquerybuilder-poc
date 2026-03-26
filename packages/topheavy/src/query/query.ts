@@ -20,10 +20,16 @@ class QueryBuilderImpl {
   private _orderBys: QueryOrderBy[] = [];
 
   private _finalizeGroup(): void {
+    while (this._currentGroup.length > 0) {
+      const last = this._currentGroup[this._currentGroup.length - 1];
+      if (last === 'and' || last === 'or') this._currentGroup.pop();
+      else break;
+    }
     if (this._currentGroup.length > 0) {
       this._conditions.push([...this._currentGroup]);
       this._currentGroup = [];
     }
+    this._negated = false;
   }
 
   private _addCondition(operator: string, value: unknown): this {
@@ -76,6 +82,7 @@ class QueryBuilderImpl {
   // --- Same-path chaining (stays in current group) ---
 
   get and(): any {
+    this._negated = false;
     const last = this._currentGroup[this._currentGroup.length - 1];
     if (this._currentGroup.length > 0 && last !== 'and' && last !== 'or') {
       this._currentGroup.push('and');
@@ -84,6 +91,7 @@ class QueryBuilderImpl {
   }
 
   get or(): any {
+    this._negated = false;
     const last = this._currentGroup[this._currentGroup.length - 1];
     if (this._currentGroup.length > 0 && last !== 'and' && last !== 'or') {
       this._currentGroup.push('or');
@@ -96,7 +104,9 @@ class QueryBuilderImpl {
   andWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
     this._negated = false;
-    this._conditions.push('and');
+    if (this._conditions.length > 0) {
+      this._conditions.push('and');
+    }
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
@@ -111,7 +121,9 @@ class QueryBuilderImpl {
   orWhere(pathOrSubquery: string | ((qb: QueryBuilderImpl) => void)): any {
     this._finalizeGroup();
     this._negated = false;
-    this._conditions.push('or');
+    if (this._conditions.length > 0) {
+      this._conditions.push('or');
+    }
     if (typeof pathOrSubquery === 'function') {
       const sub = new QueryBuilderImpl();
       pathOrSubquery(sub);
