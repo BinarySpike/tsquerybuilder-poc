@@ -3,9 +3,23 @@ import type { CacheAdapter, QueryDescriptor, StoreAdapter } from './orm.types';
 
 // ── Shared store implementation ───────────────────────────────────────
 
+/**
+ * localStorage-backed store. Every key is namespaced with `ns` so that
+ * the cache adapter and store adapter never share keys — preventing
+ * cache.clear() from accidentally wiping store records.
+ *
+ *   store adapter keys:  store:todos:0,  store:todos:__seq
+ *   cache adapter keys:  cache:todos:1
+ */
 class LocalStorageStore {
+    constructor(private readonly _ns: string) {}
+
+    private _key(tableName: string, id: unknown): string {
+        return `${this._ns}${tableName}:${id}`;
+    }
+
     private _prefix(tableName: string): string {
-        return `${tableName}:`;
+        return `${this._ns}${tableName}:`;
     }
 
     private *_entries(tableName: string): Iterable<[string, unknown]> {
@@ -13,23 +27,25 @@ class LocalStorageStore {
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i)!;
             if (key.startsWith(prefix)) {
+                const id = key.slice(prefix.length);
+                if (id === '__seq') continue;   // skip sequence counter
                 const raw = localStorage.getItem(key);
-                if (raw !== null) yield [key.slice(prefix.length), JSON.parse(raw)];
+                if (raw !== null) yield [id, JSON.parse(raw)];
             }
         }
     }
 
     get(tableName: string, id: unknown): unknown | null {
-        const raw = localStorage.getItem(`${tableName}:${id}`);
+        const raw = localStorage.getItem(this._key(tableName, id));
         return raw !== null ? JSON.parse(raw) : null;
     }
 
     set(tableName: string, id: unknown, value: unknown): void {
-        localStorage.setItem(`${tableName}:${id}`, JSON.stringify(value));
+        localStorage.setItem(this._key(tableName, id), JSON.stringify(value));
     }
 
     delete(tableName: string, id: unknown): void {
-        localStorage.removeItem(`${tableName}:${id}`);
+        localStorage.removeItem(this._key(tableName, id));
     }
 
     clear(tableName: string): void {
@@ -40,18 +56,17 @@ class LocalStorageStore {
             if (key.startsWith(prefix)) toRemove.push(key);
         }
         for (const k of toRemove) localStorage.removeItem(k);
-        localStorage.removeItem(`topheavy:${tableName}:__seq`);
     }
 
     insert(tableName: string, value: unknown): void {
-        const seqKey = `topheavy:${tableName}:__seq`;
+        const seqKey = this._key(tableName, '__seq');
         const seq = Number(localStorage.getItem(seqKey) ?? '0');
-        localStorage.setItem(`${tableName}:${seq}`, JSON.stringify(value));
+        localStorage.setItem(this._key(tableName, seq), JSON.stringify(value));
         localStorage.setItem(seqKey, String(seq + 1));
     }
 
     update(tableName: string, id: unknown, patch: unknown): void {
-        const key = `${tableName}:${id}`;
+        const key = this._key(tableName, id);
         const raw = localStorage.getItem(key);
         const existing = raw !== null ? JSON.parse(raw) : null;
         if (existing !== null && typeof existing === 'object') {
@@ -69,7 +84,7 @@ class LocalStorageStore {
 // ── Adapter factories ─────────────────────────────────────────────────
 
 export function createLocalStorageCacheAdapter(): CacheAdapter {
-    const store = new LocalStorageStore();
+    const store = new LocalStorageStore('cache:');
     return {
         async get(tableName, id)           { return store.get(tableName, id); },
         async set(tableName, id, value)    { store.set(tableName, id, value); },
@@ -80,7 +95,7 @@ export function createLocalStorageCacheAdapter(): CacheAdapter {
 }
 
 export function createLocalStorageStorageAdapter(): StoreAdapter {
-    const store = new LocalStorageStore();
+    const store = new LocalStorageStore('store:');
     return {
         async find(tableName, descriptor)    { return store.query(tableName, descriptor); },
         async findOne(tableName, descriptor) { return store.query(tableName, descriptor)[0] ?? null; },
