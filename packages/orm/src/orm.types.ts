@@ -64,16 +64,13 @@ export type TableType<Tables, K extends keyof Tables> =
 export type RepositoryItem<T> = T & { readonly $id: string; readonly $table: string };
 
 /**
- * Returned by non-aggregate selects. Extends Array<RepositoryItem<T>> with a
- * non-enumerable `_tableName` that Transaction reads to identify the source table.
+ * Returned by non-aggregate selects. Each element is a `RepositoryItem<T>` with
+ * `$id` and `$table` stamped on it by the adapter.
  *
- * Aggregate selects return a plain `A[]` (no `_tableName`), so TypeScript
- * rejects passing them to `Database.Transaction`, giving a compile-time error.
+ * Aggregate selects return a plain `A[]` whose elements lack `$id`/`$table`, so
+ * TypeScript rejects passing them to `Database.Transaction` at compile time.
  */
-export interface MutableResult<T> extends Array<RepositoryItem<T>> {
-    /** @internal */
-    readonly _tableName: string;
-}
+export type MutableResult<T> = Array<RepositoryItem<T>>;
 
 // ── ORM query types ───────────────────────────────────────────────────
 
@@ -83,7 +80,7 @@ export interface MutableResult<T> extends Array<RepositoryItem<T>> {
  *
  * Non-aggregate selects resolve to MutableResult<T> (usable in Transaction).
  * Aggregate selects resolve to a plain array (not usable in Transaction —
- * enforced at compile time by the absence of _tableName).
+ * enforced at compile time because elements lack $id/$table).
  */
 export interface OrmResolver<T> extends Omit<QueryResolver<T>, 'selectAll' | 'select'>, PromiseLike<MutableResult<T>> {
     selectAll(): PromiseLike<MutableResult<T>>;

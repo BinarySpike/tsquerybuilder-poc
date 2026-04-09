@@ -51,7 +51,7 @@ async function addTodo(): Promise<void> {
 }
 
 async function toggleTodo(todo: Todo): Promise<void> {
-    await db.Transaction(todo, t => { t.completed = !t.completed; });
+    await db.Transaction(todo, t => {t.completed = !t.completed; });
     await load();
 }
 
@@ -64,6 +64,15 @@ async function onKeydown(e: KeyboardEvent): Promise<void> {
     if (e.key === 'Enter') await addTodo();
 }
 
+async function iWin(): Promise<void> {
+    await db.Transaction(todos.value, t => {
+        t.forEach(todo => {
+            todo.completed = true;
+        });
+    })
+    await load();
+}
+
 // ── Init ────────────────────────────────────────────────────────────────
 
 onMounted(load);
@@ -71,8 +80,8 @@ onMounted(load);
 
 <template>
     <h1>Todo List</h1>
-    <p class="subtitle">Persisted via <code>localStorage</code> using topheavy ORM</p>
-
+    <p class="subtitle">Persisted via <code>localStorage</code> using TopHeavy!</p>
+    <button class="btn-add" @click="iWin">Click me to Win</button>
     <div class="add-row">
         <input
             v-model="inputText"

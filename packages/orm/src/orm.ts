@@ -13,6 +13,21 @@ import type {
     QueryDescriptor,
 } from './orm.types';
 
+// ── Deep plain-object clone (Proxy-transparent) ───────────────────────
+// Uses Object.keys + recursive descent so that it works through any Proxy
+// (e.g. Vue reactive, ObservableSlim) without relying on structuredClone,
+// which cannot clone Proxy objects in some runtimes.
+function deepPlainClone<T>(val: T): T {
+    if (val === null || typeof val !== 'object') return val;
+    if (val instanceof Date) return new Date(val.getTime()) as unknown as T;
+    if (Array.isArray(val)) return val.map(deepPlainClone) as unknown as T;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(val as object)) {
+        out[key] = deepPlainClone((val as Record<string, unknown>)[key]);
+    }
+    return out as T;
+}
+
 // ── Condition evaluator ───────────────────────────────────────────────
 
 function getValueAtPath(record: unknown, path: string): unknown {
@@ -106,7 +121,7 @@ export function evaluateConditions(record: unknown, conditions: QueryConditions)
  * was called.
  *
  * _isAggregate tracks whether an aggregate callback was passed to select(),
- * so _execute knows whether to stamp _tableName (mutable) or not (aggregate).
+ * so _execute knows whether to return MutableResult<T> or a plain aggregate array.
  */
 class OrmQueryBuilderImpl<T> extends QueryBuilderImpl implements OrmQueryBuilder<T> {
     private _descriptor: QueryDescriptor | null = null;
@@ -211,25 +226,25 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
      */
     async Transaction<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void>;
     /**
-     * Batch form: wraps all records in `MutableResult` with ObservableSlim
+     * Batch form: wraps all records in an `RepositoryItem<T>[]` with ObservableSlim
      * proxies, runs `mutator`, then flushes one differential update per changed
      * record to the store. On any store failure all in-memory mutations are
      * reverted and the error is re-thrown.
      */
-    async Transaction<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
+    async Transaction<T extends object>(results: RepositoryItem<T>[], mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
     async Transaction<T extends object>(
-        target: RepositoryItem<T> | MutableResult<T>,
+        target: RepositoryItem<T> | RepositoryItem<T>[],
         mutator: ((record: RepositoryItem<T>) => void) | ((records: RepositoryItem<T>[]) => void),
     ): Promise<void> {
         if (Array.isArray(target)) {
-            return this._transactBatch(target as MutableResult<T>, mutator as (records: RepositoryItem<T>[]) => void);
+            return this._transactBatch(target as RepositoryItem<T>[], mutator as (records: RepositoryItem<T>[]) => void);
         }
         return this._transactOne(target as RepositoryItem<T>, mutator as (record: RepositoryItem<T>) => void);
     }
 
     private async _transactOne<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
         const tableName = record.$table;
-        const snapshot = structuredClone(record as object) as RepositoryItem<T>;
+        const snapshot = deepPlainClone(record as object) as RepositoryItem<T>;
 
         const diff: Record<string, unknown> = {};
         const proxied = ObservableSlim.create(record, false, (changes) => {
@@ -250,9 +265,12 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         }
     }
 
-    private async _transactBatch<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
+    private async _transactBatch<T extends object>(results: RepositoryItem<T>[], mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
+        if (results.length === 0) return;
+        const tableName = results[0].$table;
+
         // 1. Snapshot every record for rollback
-        const snapshots = results.map(r => structuredClone(r as object) as RepositoryItem<T>);
+        const snapshots = results.map(r => deepPlainClone(r as object) as RepositoryItem<T>);
 
         // 2. Wire up observable-slim on each record to collect diffs
         const diffs = new Map<string, Record<string, unknown>>();
@@ -272,7 +290,7 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         // 4. Persist differential updates; rollback everything on failure
         try {
             for (const [id, diff] of diffs) {
-                await this._store.update(results._tableName, id, diff);
+                await this._store.update(tableName, id, diff);
             }
         } catch (err) {
             // Restore all records to their pre-transaction state
@@ -301,13 +319,6 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
             return records as T[];
         }
 
-        // Stamp _tableName onto the array (non-enumerable) so Transaction can
-        // identify the source table without it appearing in spread/JSON.
-        return Object.defineProperty(records, '_tableName', {
-            value: tableName,
-            enumerable: false,
-            configurable: false,
-            writable: false,
-        }) as MutableResult<T>;
+        return records as MutableResult<T>;
     }
 }
