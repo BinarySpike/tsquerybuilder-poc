@@ -3,7 +3,7 @@ declare module 'observable-slim' {
 
     interface Change {
         type: ChangeType;
-        property: string;
+        property: string | symbol;
         currentPath: string;
         newValue: unknown;
         previousValue: unknown;

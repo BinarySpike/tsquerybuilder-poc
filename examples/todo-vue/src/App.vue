@@ -6,7 +6,7 @@ import {
     createLocalStorageCacheAdapter,
     createLocalStorageStorageAdapter,
 } from '@topheavy/orm/localStorage';
-import type { MutableResult } from '@topheavy/orm';
+import type { RepositoryItem } from '@topheavy/orm';
 
 // ── Schema ─────────────────────────────────────────────────────────────
 
@@ -15,7 +15,7 @@ const TodoSchema = schema(t => ({
     completed: t.bool,
 }));
 
-type Todo = MutableResult<typeof TodoSchema.infer>;
+type Todo = RepositoryItem<typeof TodoSchema.infer>;
 
 // ── Database setup ─────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ const addDisabled = computed(() => inputText.value.trim().length === 0);
 // ── Load ────────────────────────────────────────────────────────────────
 
 async function load(): Promise<void> {
-    todos.value = await db.query('todos') as Todo[];
+    todos.value = await db.query('todos');
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────

@@ -209,15 +209,15 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
      * The record must have been returned by `db.query()` so that `$id` and
      * `$table` are present on it.
      */
-    async Transaction<T>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void>;
+    async Transaction<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void>;
     /**
      * Batch form: wraps all records in `MutableResult` with ObservableSlim
      * proxies, runs `mutator`, then flushes one differential update per changed
      * record to the store. On any store failure all in-memory mutations are
      * reverted and the error is re-thrown.
      */
-    async Transaction<T>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
-    async Transaction<T>(
+    async Transaction<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
+    async Transaction<T extends object>(
         target: RepositoryItem<T> | MutableResult<T>,
         mutator: ((record: RepositoryItem<T>) => void) | ((records: RepositoryItem<T>[]) => void),
     ): Promise<void> {
@@ -227,14 +227,14 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         return this._transactOne(target as RepositoryItem<T>, mutator as (record: RepositoryItem<T>) => void);
     }
 
-    private async _transactOne<T>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
+    private async _transactOne<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
         const tableName = record.$table;
         const snapshot = structuredClone(record as object) as RepositoryItem<T>;
 
         const diff: Record<string, unknown> = {};
-        const proxied = ObservableSlim.create(record as object, false, (changes) => {
+        const proxied = ObservableSlim.create(record, false, (changes) => {
             for (const c of changes) {
-                diff[c.property] = c.newValue;
+                diff[c.property as string] = c.newValue;
             }
         }) as RepositoryItem<T>;
 
@@ -250,7 +250,7 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         }
     }
 
-    private async _transactBatch<T>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
+    private async _transactBatch<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
         // 1. Snapshot every record for rollback
         const snapshots = results.map(r => structuredClone(r as object) as RepositoryItem<T>);
 
@@ -258,10 +258,10 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         const diffs = new Map<string, Record<string, unknown>>();
         const proxied = results.map((r) => {
             const id = r.$id;
-            return ObservableSlim.create(r as object, false, (changes) => {
+            return ObservableSlim.create(r, false, (changes) => {
                 for (const c of changes) {
                     if (!diffs.has(id)) diffs.set(id, {});
-                    diffs.get(id)![c.property] = c.newValue;
+                    diffs.get(id)![c.property as string] = c.newValue;
                 }
             }) as RepositoryItem<T>;
         });
