@@ -19,11 +19,11 @@ type Todo = RepositoryItem<typeof TodoSchema.infer>;
 
 // ── Database setup ─────────────────────────────────────────────────────
 
-const db = new Database(
-    createLocalStorageCacheAdapter(),
-    createLocalStorageStorageAdapter(),
-    { tables: { todos: TodoSchema } },
-);
+const db = new Database({
+    cache: createLocalStorageCacheAdapter(),
+    store: createLocalStorageStorageAdapter(),
+    tables: { todos: TodoSchema },
+});
 
 // ── State ───────────────────────────────────────────────────────────────
 

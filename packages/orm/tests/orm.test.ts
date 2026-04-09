@@ -27,7 +27,7 @@ const bob = {
 function makeDb() {
     const cache = createMemoryCacheAdapter();
     const store = createMemoryStoreAdapter();
-    const db = new Database(cache, store, { tables: { Customers: Customer, Addresses: Address } });
+    const db = new Database({ cache, store, tables: { Customers: Customer, Addresses: Address } });
     return { db, cache, store };
 }
 
@@ -344,7 +344,7 @@ describe('Database.Transaction', () => {
             patches.push(patch);
             return originalUpdate(table, id, patch);
         };
-        const { db: patchDb } = { db: new Database(createMemoryCacheAdapter(), patchingStore, { tables: { Customers: Customer } }) };
+        const { db: patchDb } = { db: new Database({ cache: createMemoryCacheAdapter(), store: patchingStore, tables: { Customers: Customer } }) };
         await patchingStore.insert('Customers', { ...alice });
 
         const results = await patchDb.query('Customers').where('id').is(1);
@@ -361,7 +361,7 @@ describe('Database.Transaction', () => {
         const failingStore = createMemoryStoreAdapter();
         await failingStore.insert('Customers', { ...alice });
         failingStore.update = async () => { throw new Error('store failure'); };
-        const { db: failDb } = { db: new Database(createMemoryCacheAdapter(), failingStore, { tables: { Customers: Customer } }) };
+        const { db: failDb } = { db: new Database({ cache: createMemoryCacheAdapter(), store: failingStore, tables: { Customers: Customer } }) };
 
         const results = await failDb.query('Customers').where('id').is(1);
         const originalName = results[0].companyName;
@@ -379,7 +379,7 @@ describe('Database.Transaction', () => {
         const noopStore = createMemoryStoreAdapter();
         await noopStore.insert('Customers', { ...alice });
         noopStore.update = async () => { updateCalled = true; };
-        const { db: noopDb } = { db: new Database(createMemoryCacheAdapter(), noopStore, { tables: { Customers: Customer } }) };
+        const { db: noopDb } = { db: new Database({ cache: createMemoryCacheAdapter(), store: noopStore, tables: { Customers: Customer } }) };
 
         const results = await noopDb.query('Customers').where('id').is(1);
         await noopDb.Transaction(results, () => { /* no mutations */ });
@@ -413,7 +413,7 @@ describe('Database.insert and Database.delete', () => {
         const all = await db.query('Customers');
         expect(all).toHaveLength(2);
 
-        await db.delete('Customers', all[0].$id);
+        await db.delete(all[0]);
         const remaining = await db.query('Customers');
         expect(remaining).toHaveLength(1);
     });
@@ -421,7 +421,7 @@ describe('Database.insert and Database.delete', () => {
     it('db.insert clears the cache so the next query reflects the new record', async () => {
         const cache = createMemoryCacheAdapter();
         const store = createMemoryStoreAdapter();
-        const db = new Database(cache, store, { tables: { Customers: Customer } });
+        const db = new Database({ cache, store, tables: { Customers: Customer } });
 
         // Prime the cache with alice only
         await cache.set('Customers', '0', { ...alice });
@@ -443,9 +443,56 @@ describe('Database.insert and Database.delete', () => {
         await db.query('Customers');
 
         const all = await db.query('Customers');
-        await db.delete('Customers', all[0].$id);
+        await db.delete(all[0]);
 
         const afterDelete = await db.query('Customers');
         expect(afterDelete).toHaveLength(0);
+    });
+});
+
+// ── Reactive mode ─────────────────────────────────────────────────────
+
+describe('reactive mode', () => {
+    it('reactive: true auto-persists direct property mutations', async () => {
+        const store = createMemoryStoreAdapter();
+        await store.insert('Customers', { ...alice });
+        const db = new Database({ cache: createMemoryCacheAdapter(), store, reactive: true, tables: { Customers: Customer } });
+
+        const results = await db.query('Customers').where('id').is(1);
+        results[0].companyName = 'FooCorp';
+
+        // Let fire-and-forget settle
+        await new Promise(r => setTimeout(r, 0));
+
+        const refetch = await db.query('Customers').where('id').is(1);
+        expect(refetch[0].companyName).toBe('FooCorp');
+    });
+
+    it('reactive: true Transaction unwraps the reactive proxy (no double store.update)', async () => {
+        const updates: unknown[] = [];
+        const store = createMemoryStoreAdapter();
+        await store.insert('Customers', { ...alice });
+        const originalUpdate = store.update.bind(store);
+        store.update = async (table, id, patch) => { updates.push(patch); return originalUpdate(table, id, patch); };
+
+        const db = new Database({ cache: createMemoryCacheAdapter(), store, reactive: true, tables: { Customers: Customer } });
+        const results = await db.query('Customers').where('id').is(1);
+
+        await db.Transaction(results, r => { r[0].companyName = 'FooCorp'; });
+
+        // Only one store.update call — the transaction one; the reactive handler does not fire
+        expect(updates).toHaveLength(1);
+        expect(updates[0]).toEqual({ companyName: 'FooCorp' });
+    });
+
+    it('reactive: false throws when mutating a record directly', async () => {
+        const store = createMemoryStoreAdapter();
+        await store.insert('Customers', { ...alice });
+        const db = new Database({ cache: createMemoryCacheAdapter(), store, tables: { Customers: Customer } });
+
+        const results = await db.query('Customers').where('id').is(1);
+        expect(() => { results[0].companyName = 'FooCorp'; }).toThrow(
+            'Cannot mutate record directly when reactive is false'
+        );
     });
 });

@@ -173,14 +173,16 @@ class OrmQueryBuilderImpl<T> extends QueryBuilderImpl implements OrmQueryBuilder
 export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
     private readonly _cache: CacheAdapter;
     private readonly _store: StoreAdapter;
+    private readonly _reactive: boolean;
+    /** Maps any proxy returned by _execute (reactive or readonly) → its raw underlying record. */
+    private readonly _proxyRaws = new WeakMap<object, object>();
+    /** Maps reactive proxies → a mutable pause-state cell used to silence the handler during Transaction. */
+    private readonly _reactiveEntries = new WeakMap<object, { paused: boolean }>();
 
-    constructor(
-        cache: CacheAdapter,
-        store: StoreAdapter,
-        _options: DatabaseOptions<Tables>,
-    ) {
-        this._cache = cache;
-        this._store = store;
+    constructor(options: DatabaseOptions<Tables>) {
+        this._cache    = options.cache;
+        this._store    = options.store;
+        this._reactive = options.reactive ?? false;
     }
 
     query<K extends keyof Tables & string>(tableName: K): OrmQueryBuilder<TableType<Tables, K>> {
@@ -225,12 +227,22 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         return this._transactOne(target as RepositoryItem<T>, mutator as (record: RepositoryItem<T>) => void);
     }
 
+    /** Returns the raw underlying record for any proxy returned by _execute, or the item itself. */
+    private _unwrapProxy<T extends object>(item: RepositoryItem<T>): RepositoryItem<T> {
+        return (this._proxyRaws.get(item) ?? item) as RepositoryItem<T>;
+    }
+
     private async _transactOne<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
-        const tableName = record.$table;
-        const snapshot = JSON.parse(JSON.stringify(record)) as RepositoryItem<T>;
+        // Pause the reactive auto-persist handler (if any) so it doesn't double-fire
+        const entry = this._reactiveEntries.get(record);
+        if (entry) entry.paused = true;
+
+        const raw = this._unwrapProxy(record);
+        const tableName = raw.$table;
+        const snapshot = JSON.parse(JSON.stringify(raw)) as RepositoryItem<T>;
 
         const diff: Record<string, unknown> = {};
-        const proxied = ObservableSlim.create(record, false, (changes) => {
+        const proxied = ObservableSlim.create(raw, false, (changes) => {
             for (const c of changes) {
                 diff[c.property as string] = c.newValue;
             }
@@ -238,25 +250,32 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
 
         mutator(proxied);
 
+        if (entry) entry.paused = false;
+
         if (Object.keys(diff).length === 0) return;
 
         try {
-            await this._store.update(tableName, record.$id, diff);
+            await this._store.update(tableName, raw.$id, diff);
         } catch (err) {
-            Object.assign(record as object, snapshot);
+            Object.assign(raw as object, snapshot);
             throw err;
         }
     }
 
     private async _transactBatch<T extends object>(results: RepositoryItem<T>[], mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
-        // 1. Snapshot every record for rollback
-        const snapshots = results.map(r => JSON.parse(JSON.stringify(r)) as RepositoryItem<T>);
+        // 1. Pause reactive auto-persist handlers so they don't double-fire during the transaction
+        const entries = results.map(r => this._reactiveEntries.get(r) ?? null);
+        entries.forEach(e => { if (e) e.paused = true; });
 
-        // 2. Wire up observable-slim on each record to collect diffs
+        // 2. Unwrap any proxies (reactive or readonly) to get the raw records, then snapshot for rollback
+        const raws = results.map(r => this._unwrapProxy(r));
+        const snapshots = raws.map(r => JSON.parse(JSON.stringify(r)) as RepositoryItem<T>);
+
+        // 3. Wire up observable-slim on each raw record to collect diffs
         const diffs = new Map<string, Record<string, unknown>>();
-        const proxied = results.map((r) => {
-            const id = r.$id;
-            return ObservableSlim.create(r, false, (changes) => {
+        const proxied = raws.map((raw) => {
+            const id = raw.$id;
+            return ObservableSlim.create(raw, false, (changes) => {
                 for (const c of changes) {
                     if (!diffs.has(id)) diffs.set(id, {});
                     diffs.get(id)![c.property as string] = c.newValue;
@@ -264,18 +283,21 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
             }) as RepositoryItem<T>;
         });
 
-        // 3. Let the caller mutate
+        // 4. Let the caller mutate
         mutator(proxied);
 
-        // 4. Persist differential updates; rollback everything on failure
+        // 5. Resume reactive handlers
+        entries.forEach(e => { if (e) e.paused = false; });
+
+        // 6. Persist differential updates; rollback everything on failure
         try {
             for (const [id, diff] of diffs) {
-                await this._store.update(results[0].$table, id, diff);
+                await this._store.update(raws[0].$table, id, diff);
             }
         } catch (err) {
             // Restore all records to their pre-transaction state
-            for (let i = 0; i < results.length; i++) {
-                Object.assign(results[i] as object, snapshots[i]);
+            for (let i = 0; i < raws.length; i++) {
+                Object.assign(raws[i] as object, snapshots[i]);
             }
             throw err;
         }
@@ -299,6 +321,41 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
             return records as T[];
         }
 
-        return records as RepositoryItem<T>[];
+        const items = records as RepositoryItem<T>[];
+
+        if (this._reactive) {
+            return items.map(record => {
+                const entry = { paused: false };
+                const proxy = ObservableSlim.create(record, false, (changes) => {
+                    if (entry.paused) return;
+                    const diff: Record<string, unknown> = {};
+                    for (const c of changes) {
+                        diff[c.property as string] = c.newValue;
+                    }
+                    if (Object.keys(diff).length > 0) {
+                        this._store.update(record.$table, record.$id, diff)
+                            .then(() => this._cache.clear(record.$table))
+                            .catch(err => console.error('[orm] reactive update failed', err));
+                    }
+                }) as RepositoryItem<T>;
+                this._proxyRaws.set(proxy, record);
+                this._reactiveEntries.set(proxy, entry);
+                return proxy;
+            });
+        } else {
+            return items.map(record => {
+                const proxy = new Proxy(record, {
+                    set(_target, prop, _value) {
+                        if (String(prop).startsWith('$')) return true;
+                        throw new Error(
+                            `Cannot mutate record directly when reactive is false. ` +
+                            `Use db.Transaction() to modify records.`
+                        );
+                    }
+                });
+                this._proxyRaws.set(proxy, record);
+                return proxy;
+            });
+        }
     }
 }

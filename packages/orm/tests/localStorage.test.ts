@@ -42,7 +42,7 @@ const bob = {
 function makeDb() {
     const cache = createLocalStorageCacheAdapter();
     const store = createLocalStorageStorageAdapter();
-    const db = new Database(cache, store, { tables: { Customers: Customer, Addresses: Address } });
+    const db = new Database({ cache, store, tables: { Customers: Customer, Addresses: Address } });
     return { db, cache, store };
 }
 

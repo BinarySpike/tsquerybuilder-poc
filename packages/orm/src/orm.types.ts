@@ -45,6 +45,9 @@ export interface StoreAdapter {
 // ── Database options ──────────────────────────────────────────────────
 
 export interface DatabaseOptions<Tables extends Record<string, TypeDefinition<any, any>>> {
+    cache: CacheAdapter;
+    store: StoreAdapter;
+    reactive?: boolean;
     tables: Tables;
 }
 
