@@ -1,0 +1,38 @@
+{
+  "name": "@topheavy/orm",
+  "version": "0.1.0",
+  "description": "TopHeavy ORM with cache/store adapters",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./inMemory": {
+      "import": "./dist/inMemory.js",
+      "types": "./dist/inMemory.d.ts"
+    },
+    "./localStorage": {
+      "import": "./dist/localStorage.js",
+      "types": "./dist/localStorage.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@topheavy/query": "*",
+    "@topheavy/schema": "*",
+    "observable-slim": "^0.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}

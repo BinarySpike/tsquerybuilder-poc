@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Database } from '../src/orm/index';
-import { createMemoryCacheAdapter, createMemoryStoreAdapter } from '../src/orm/inMemory';
-import type { QueryDescriptor } from '../src/orm/orm.types';
-import { Customer, Address } from './testData.ts';
+import { Database } from '../src/index';
+import { createMemoryCacheAdapter, createMemoryStoreAdapter } from '../src/inMemory';
+import type { QueryDescriptor } from '../src/orm.types';
+import { Customer, Address } from '../../schema/tests/testData.ts';
 
 const ALL: QueryDescriptor = { conditions: [], select: '*' };
 

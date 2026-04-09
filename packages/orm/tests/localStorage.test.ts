@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Database } from '../src/orm/index';
-import { createLocalStorageCacheAdapter, createLocalStorageStorageAdapter } from '../src/orm/localStorage';
-import type { QueryDescriptor } from '../src/orm/orm.types';
-import { Customer, Address } from './testData.ts';
+import { Database } from '../src/index';
+import { createLocalStorageCacheAdapter, createLocalStorageStorageAdapter } from '../src/localStorage';
+import type { QueryDescriptor } from '../src/orm.types';
+import { Customer, Address } from '../../schema/tests/testData.ts';
 
 // ── localStorage mock for Node test environment ───────────────────────
 

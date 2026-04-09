@@ -1,13 +1,13 @@
 import ObservableSlim from 'observable-slim';
-import { QueryBuilderImpl, AggregateSelectorImpl } from '../query/query';
-import type { QueryConditions, QueryConditionGroup, QueryConditionLeaf } from '../query/query.types';
-import type { TypeDefinition } from '../schema/schema.types';
+import { QueryBuilderImpl, AggregateSelectorImpl } from '@topheavy/query';
+import type { QueryConditions, QueryConditionGroup, QueryConditionLeaf } from '@topheavy/query';
+import type { TypeDefinition } from '@topheavy/schema';
 import type {
     CacheAdapter,
     StoreAdapter,
     DatabaseOptions,
     TableType,
-    WithStoreId,
+    RepositoryItem,
     MutableResult,
     OrmQueryBuilder,
     QueryDescriptor,
@@ -196,12 +196,9 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         await this._cache.clear(tableName);
     }
 
-    async delete<K extends keyof Tables & string>(
-        tableName: K,
-        id: string,
-    ): Promise<void> {
-        await this._store.delete(tableName, id);
-        await this._cache.clear(tableName);
+    async delete<T>(record: RepositoryItem<T>): Promise<void> {
+        await this._store.delete(record.$table, record.$id);
+        await this._cache.clear(record.$table);
     }
 
     /**
@@ -212,34 +209,34 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
      * The record must have been returned by `db.query()` so that `$id` and
      * `$table` are present on it.
      */
-    async Transaction<T>(record: WithStoreId<T>, mutator: (record: WithStoreId<T>) => void): Promise<void>;
+    async Transaction<T>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void>;
     /**
      * Batch form: wraps all records in `MutableResult` with ObservableSlim
      * proxies, runs `mutator`, then flushes one differential update per changed
      * record to the store. On any store failure all in-memory mutations are
      * reverted and the error is re-thrown.
      */
-    async Transaction<T>(results: MutableResult<T>, mutator: (records: WithStoreId<T>[]) => void): Promise<void>;
+    async Transaction<T>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
     async Transaction<T>(
-        target: WithStoreId<T> | MutableResult<T>,
-        mutator: ((record: WithStoreId<T>) => void) | ((records: WithStoreId<T>[]) => void),
+        target: RepositoryItem<T> | MutableResult<T>,
+        mutator: ((record: RepositoryItem<T>) => void) | ((records: RepositoryItem<T>[]) => void),
     ): Promise<void> {
         if (Array.isArray(target)) {
-            return this._transactBatch(target as MutableResult<T>, mutator as (records: WithStoreId<T>[]) => void);
+            return this._transactBatch(target as MutableResult<T>, mutator as (records: RepositoryItem<T>[]) => void);
         }
-        return this._transactOne(target as WithStoreId<T>, mutator as (record: WithStoreId<T>) => void);
+        return this._transactOne(target as RepositoryItem<T>, mutator as (record: RepositoryItem<T>) => void);
     }
 
-    private async _transactOne<T>(record: WithStoreId<T>, mutator: (record: WithStoreId<T>) => void): Promise<void> {
+    private async _transactOne<T>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
         const tableName = record.$table;
-        const snapshot = structuredClone(record as object) as WithStoreId<T>;
+        const snapshot = structuredClone(record as object) as RepositoryItem<T>;
 
         const diff: Record<string, unknown> = {};
         const proxied = ObservableSlim.create(record as object, false, (changes) => {
             for (const c of changes) {
                 diff[c.property] = c.newValue;
             }
-        }) as WithStoreId<T>;
+        }) as RepositoryItem<T>;
 
         mutator(proxied);
 
@@ -253,9 +250,9 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         }
     }
 
-    private async _transactBatch<T>(results: MutableResult<T>, mutator: (records: WithStoreId<T>[]) => void): Promise<void> {
+    private async _transactBatch<T>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
         // 1. Snapshot every record for rollback
-        const snapshots = results.map(r => structuredClone(r as object) as WithStoreId<T>);
+        const snapshots = results.map(r => structuredClone(r as object) as RepositoryItem<T>);
 
         // 2. Wire up observable-slim on each record to collect diffs
         const diffs = new Map<string, Record<string, unknown>>();
@@ -266,7 +263,7 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
                     if (!diffs.has(id)) diffs.set(id, {});
                     diffs.get(id)![c.property] = c.newValue;
                 }
-            }) as WithStoreId<T>;
+            }) as RepositoryItem<T>;
         });
 
         // 3. Let the caller mutate

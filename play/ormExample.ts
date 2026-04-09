@@ -1,6 +1,6 @@
-import { Database } from 'topheavy/orm';
-import { createMemoryCacheAdapter, createMemoryStoreAdapter } from 'topheavy/orm/inMemory'
-import { Customer } from '../packages/topheavy/tests/testData';
+import { Database } from '@topheavy/orm';
+import { createMemoryCacheAdapter, createMemoryStoreAdapter } from '@topheavy/orm/inMemory';
+import { Customer } from '../packages/schema/tests/testData';
 
 const cache = createMemoryCacheAdapter();
 const store = createMemoryStoreAdapter();

@@ -1,0 +1,25 @@
+{
+  "name": "@topheavy/query",
+  "version": "0.1.0",
+  "description": "TopHeavy fluent query builder",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}

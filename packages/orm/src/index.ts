@@ -4,7 +4,7 @@ export type {
     StoreAdapter,
     DatabaseOptions,
     TableType,
-    WithStoreId,
+    RepositoryItem,
     MutableResult,
     OrmQueryBuilder,
     OrmResolver,

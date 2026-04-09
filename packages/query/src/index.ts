@@ -1,4 +1,4 @@
-export { query } from './query';
+export { query, QueryBuilderImpl, AggregateSelectorImpl } from './query';
 export type {
   Query,
   Subquery,

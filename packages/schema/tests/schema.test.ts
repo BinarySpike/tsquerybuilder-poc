@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { schema } from '../src/schema';
-import type { ThStringChain } from '../src/schema/schema.types';
+import { schema } from '../src/index';
+import type { ThStringChain } from '../src/schema.types';
 import { Customer, Business, Invoice, Address, LineItem } from './testData.ts';
 
 describe('schema() schema definition and validation', () => {

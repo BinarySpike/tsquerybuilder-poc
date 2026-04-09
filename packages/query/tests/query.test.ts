@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { query } from '../src/query';
-import { Invoice } from './testData.ts';
+import { query } from '../src/index';
+import { Invoice } from '../../schema/tests/testData.ts';
 
 type InvoiceType = typeof Invoice.infer;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { schema } from '../src/schema';
+import { schema } from '../src/index';
 import { Customer, Address, LineItem } from './testData.ts';
 
 describe("schema", () => {

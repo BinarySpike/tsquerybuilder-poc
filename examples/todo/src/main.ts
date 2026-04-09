@@ -1,10 +1,9 @@
-import { schema } from '../../../packages/topheavy/src/schema/index';
-import { Database } from '../../../packages/topheavy/src/orm/index';
-import type { WithStoreId } from '../../../packages/topheavy/src/orm/index';
+import { schema } from '@topheavy/schema';
+import { Database } from '@topheavy/orm';
 import {
     createLocalStorageCacheAdapter,
     createLocalStorageStorageAdapter,
-} from '../../../packages/topheavy/src/orm/localStorage';
+} from '@topheavy/orm/localStorage';
 
 // ── Schema ─────────────────────────────────────────────────────────────
 
@@ -12,9 +11,6 @@ const TodoSchema = schema(t => ({
     text: t.str,
     completed: t.bool,
 }));
-
-type Todo = typeof TodoSchema.infer;
-type TodoItem = WithStoreId<Todo>;
 
 // ── Database setup ─────────────────────────────────────────────────────
 
@@ -53,7 +49,10 @@ async function render(): Promise<void> {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = todo.completed;
-        checkbox.addEventListener('change', () => toggle(todo));
+        checkbox.addEventListener('change', async () => {
+            await db.Transaction(todo, t => { t.completed = !t.completed; });
+            await render();
+        });
 
         const label = document.createElement('span');
         label.textContent = todo.text;
@@ -61,7 +60,10 @@ async function render(): Promise<void> {
         const del = document.createElement('button');
         del.className = 'btn-delete';
         del.textContent = 'Delete';
-        del.addEventListener('click', () => remove(todo));
+        del.addEventListener('click', async () => {
+            await db.delete(todo);
+            await render();
+        });
 
         li.append(checkbox, label, del);
         list.appendChild(li);
@@ -72,18 +74,6 @@ async function render(): Promise<void> {
 
 async function addTodo(text: string): Promise<void> {
     await db.insert('todos', { text: text.trim(), completed: false });
-    await render();
-}
-
-async function toggle(todo: TodoItem): Promise<void> {
-    await db.Transaction(todo, t => {
-        t.completed = !t.completed
-    });
-    await render();
-}
-
-async function remove(todo: TodoItem): Promise<void> {
-    await db.delete('todos', todo.$id);
     await render();
 }
 

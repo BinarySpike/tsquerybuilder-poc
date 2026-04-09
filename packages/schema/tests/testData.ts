@@ -1,4 +1,4 @@
-import { schema } from '../src/schema';
+import { schema } from '../src/index';
 
 export const Customer = schema(t => ({
     id: t.num,

@@ -1,6 +1,5 @@
-import type { QueryConditions, QueryOrderBy, QueryResolver, ChainedQuery, Condition, AggregateSelector } from '../query/query.types';
-import type { TypeDefinition } from '../schema/schema.types';
-import type { Paths, PathType } from '../query/path';
+import type { QueryConditions, QueryOrderBy, QueryResolver, ChainedQuery, Condition, AggregateSelector, Paths, PathType } from '@topheavy/query';
+import type { TypeDefinition } from '@topheavy/schema';
 
 // ── Query descriptor ─────────────────────────────────────────────────
 
@@ -62,16 +61,16 @@ export type TableType<Tables, K extends keyof Tables> =
  * but they are visible in the type system so `db.delete(tableName, record.$id)`
  * and `db.Transaction(record, ...)` compile without any cast.
  */
-export type WithStoreId<T> = T & { readonly $id: string; readonly $table: string };
+export type RepositoryItem<T> = T & { readonly $id: string; readonly $table: string };
 
 /**
- * Returned by non-aggregate selects. Extends Array<WithStoreId<T>> with a
+ * Returned by non-aggregate selects. Extends Array<RepositoryItem<T>> with a
  * non-enumerable `_tableName` that Transaction reads to identify the source table.
  *
  * Aggregate selects return a plain `A[]` (no `_tableName`), so TypeScript
  * rejects passing them to `Database.Transaction`, giving a compile-time error.
  */
-export interface MutableResult<T> extends Array<WithStoreId<T>> {
+export interface MutableResult<T> extends Array<RepositoryItem<T>> {
     /** @internal */
     readonly _tableName: string;
 }

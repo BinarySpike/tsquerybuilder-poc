@@ -6,6 +6,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "jsx": "preserve",
     "paths": {
       "@topheavy/orm/localStorage": ["../../packages/orm/src/localStorage.ts"],
       "@topheavy/orm/inMemory": ["../../packages/orm/src/inMemory.ts"],
