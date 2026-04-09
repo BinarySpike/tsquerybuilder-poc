@@ -1,5 +1,6 @@
 import { schema } from '../../../packages/topheavy/src/schema/index';
 import { Database } from '../../../packages/topheavy/src/orm/index';
+import type { WithStoreId } from '../../../packages/topheavy/src/orm/index';
 import {
     createLocalStorageCacheAdapter,
     createLocalStorageStorageAdapter,
@@ -8,18 +9,20 @@ import {
 // ── Schema ─────────────────────────────────────────────────────────────
 
 const TodoSchema = schema(t => ({
-    id: t.number(),
-    text: t.string(),
-    completed: t.boolean(),
+    text: t.str,
+    completed: t.bool,
 }));
 
 type Todo = typeof TodoSchema.infer;
+type TodoItem = WithStoreId<Todo>;
 
 // ── Database setup ─────────────────────────────────────────────────────
 
-const cache = createLocalStorageCacheAdapter();
-const store = createLocalStorageStorageAdapter();
-const db = new Database(cache, store, { tables: { todos: TodoSchema } });
+const db = new Database(
+    createLocalStorageCacheAdapter(),
+    createLocalStorageStorageAdapter(),
+    { tables: { todos: TodoSchema } },
+);
 
 // ── DOM refs ───────────────────────────────────────────────────────────
 
@@ -28,19 +31,10 @@ const addBtn = document.getElementById('add-btn') as HTMLButtonElement;
 const list = document.getElementById('list') as HTMLUListElement;
 const stats = document.getElementById('stats') as HTMLDivElement;
 
-// ── Auto-increment ID stored in localStorage ───────────────────────────
-
-function nextId(): number {
-    const key = 'topheavy:todos:nextId';
-    const id = Number(localStorage.getItem(key) ?? '1');
-    localStorage.setItem(key, String(id + 1));
-    return id;
-}
-
 // ── Render ─────────────────────────────────────────────────────────────
 
 async function render(): Promise<void> {
-    const todos = await db.query('todos').where('id').greaterThan(0) as Todo[];
+    const todos = await db.query('todos');
 
     const total = todos.length;
     const done = todos.filter(t => t.completed).length;
@@ -77,27 +71,19 @@ async function render(): Promise<void> {
 // ── Actions ────────────────────────────────────────────────────────────
 
 async function addTodo(text: string): Promise<void> {
-    const todo: Todo = { id: nextId(), text: text.trim(), completed: false };
-    await store.insert('todos', todo);
+    await db.insert('todos', { text: text.trim(), completed: false });
     await render();
 }
 
-async function toggle(todo: Todo): Promise<void> {
-    const results = await db.query('todos').where('id').is(todo.id);
-    await db.Transaction(results, rows => {
-        rows[0].completed = !rows[0].completed;
+async function toggle(todo: TodoItem): Promise<void> {
+    await db.Transaction(todo, t => {
+        t.completed = !t.completed
     });
     await render();
 }
 
-async function remove(todo: Todo): Promise<void> {
-    // Find the internal store key ($id) by querying the store directly
-    const allEntries = await store.find('todos', { conditions: [[['id', 'is', todo.id]]], select: '*' });
-    const entry = allEntries[0] as any;
-    if (entry?.$id !== undefined) {
-        await store.delete('todos', entry.$id);
-        await cache.clear('todos');
-    }
+async function remove(todo: TodoItem): Promise<void> {
+    await db.delete('todos', todo.$id);
     await render();
 }
 

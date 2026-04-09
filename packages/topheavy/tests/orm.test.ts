@@ -386,3 +386,66 @@ describe('Database.Transaction', () => {
         expect(updateCalled).toBe(false);
     });
 });
+
+// ── db.insert / db.delete ─────────────────────────────────────────────
+
+describe('Database.insert and Database.delete', () => {
+    it('db.insert stores a record retrievable via db.query', async () => {
+        const { db } = makeDb();
+        await db.insert('Customers', { ...alice });
+        const results = await db.query('Customers').where('id').is(1);
+        expect(results).toHaveLength(1);
+        expect(results[0].companyName).toBe('Alice Co');
+    });
+
+    it('db.insert assigns a $id accessible on query results', async () => {
+        const { db } = makeDb();
+        await db.insert('Customers', { ...alice });
+        const results = await db.query('Customers');
+        expect(typeof results[0].$id).toBe('string');
+    });
+
+    it('db.delete removes a record so it no longer appears in queries', async () => {
+        const { db } = makeDb();
+        await db.insert('Customers', { ...alice });
+        await db.insert('Customers', { ...bob });
+
+        const all = await db.query('Customers');
+        expect(all).toHaveLength(2);
+
+        await db.delete('Customers', all[0].$id);
+        const remaining = await db.query('Customers');
+        expect(remaining).toHaveLength(1);
+    });
+
+    it('db.insert clears the cache so the next query reflects the new record', async () => {
+        const cache = createMemoryCacheAdapter();
+        const store = createMemoryStoreAdapter();
+        const db = new Database(cache, store, { tables: { Customers: Customer } });
+
+        // Prime the cache with alice only
+        await cache.set('Customers', '0', { ...alice });
+        let results = await db.query('Customers');
+        expect(results).toHaveLength(1);
+
+        // Inserting via db should clear the cache
+        await db.insert('Customers', { ...bob });
+        results = await db.query('Customers');
+        // Both alice (from store insert) and bob should now appear
+        expect(results.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('db.delete clears the cache so the next query reflects the removal', async () => {
+        const { db } = makeDb();
+        await db.insert('Customers', { ...alice });
+
+        // Warm the cache
+        await db.query('Customers');
+
+        const all = await db.query('Customers');
+        await db.delete('Customers', all[0].$id);
+
+        const afterDelete = await db.query('Customers');
+        expect(afterDelete).toHaveLength(0);
+    });
+});

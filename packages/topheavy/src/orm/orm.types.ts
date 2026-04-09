@@ -56,13 +56,22 @@ export type TableType<Tables, K extends keyof Tables> =
 // ── Mutable result ────────────────────────────────────────────────────
 
 /**
- * Returned by non-aggregate selects. Extends Array<T> with a non-enumerable
- * `_tableName` that Transaction reads to identify the source table.
+ * A record returned from a query, augmented with its store key and source table.
+ * Both `$id` and `$table` are stamped as non-enumerable properties by the store
+ * adapter so they do not appear in JSON.stringify, spread, or schema validation —
+ * but they are visible in the type system so `db.delete(tableName, record.$id)`
+ * and `db.Transaction(record, ...)` compile without any cast.
+ */
+export type WithStoreId<T> = T & { readonly $id: string; readonly $table: string };
+
+/**
+ * Returned by non-aggregate selects. Extends Array<WithStoreId<T>> with a
+ * non-enumerable `_tableName` that Transaction reads to identify the source table.
  *
  * Aggregate selects return a plain `A[]` (no `_tableName`), so TypeScript
  * rejects passing them to `Database.Transaction`, giving a compile-time error.
  */
-export interface MutableResult<T> extends Array<T> {
+export interface MutableResult<T> extends Array<WithStoreId<T>> {
     /** @internal */
     readonly _tableName: string;
 }

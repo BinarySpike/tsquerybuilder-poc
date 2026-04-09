@@ -62,7 +62,7 @@ class LocalStorageStore {
     }
 
     query(tableName: string, descriptor: QueryDescriptor): unknown[] {
-        return executeDescriptor(this._entries(tableName), descriptor);
+        return executeDescriptor(tableName, this._entries(tableName), descriptor);
     }
 }
 

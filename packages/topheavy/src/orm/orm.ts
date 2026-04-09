@@ -7,6 +7,7 @@ import type {
     StoreAdapter,
     DatabaseOptions,
     TableType,
+    WithStoreId,
     MutableResult,
     OrmQueryBuilder,
     QueryDescriptor,
@@ -187,41 +188,94 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         return new OrmQueryBuilderImpl<TableType<Tables, K>>(this as any, tableName) as any;
     }
 
+    async insert<K extends keyof Tables & string>(
+        tableName: K,
+        record: TableType<Tables, K>,
+    ): Promise<void> {
+        await this._store.insert(tableName, record);
+        await this._cache.clear(tableName);
+    }
+
+    async delete<K extends keyof Tables & string>(
+        tableName: K,
+        id: string,
+    ): Promise<void> {
+        await this._store.delete(tableName, id);
+        await this._cache.clear(tableName);
+    }
+
     /**
-     * Runs `mutator` with Proxy-wrapped records, tracks per-field changes via
-     * observable-slim, then flushes a single differential update per changed
-     * record to the store. On any store failure, all in-memory mutations are
+     * Single-record form: wraps one query result in an ObservableSlim proxy,
+     * runs `mutator` with it, then flushes a differential update to the store.
+     * On failure the in-memory object is restored from a snapshot.
+     *
+     * The record must have been returned by `db.query()` so that `$id` and
+     * `$table` are present on it.
+     */
+    async Transaction<T>(record: WithStoreId<T>, mutator: (record: WithStoreId<T>) => void): Promise<void>;
+    /**
+     * Batch form: wraps all records in `MutableResult` with ObservableSlim
+     * proxies, runs `mutator`, then flushes one differential update per changed
+     * record to the store. On any store failure all in-memory mutations are
      * reverted and the error is re-thrown.
      */
+    async Transaction<T>(results: MutableResult<T>, mutator: (records: WithStoreId<T>[]) => void): Promise<void>;
     async Transaction<T>(
-        results: MutableResult<T>,
-        mutator: (records: T[]) => void,
+        target: WithStoreId<T> | MutableResult<T>,
+        mutator: ((record: WithStoreId<T>) => void) | ((records: WithStoreId<T>[]) => void),
     ): Promise<void> {
+        if (Array.isArray(target)) {
+            return this._transactBatch(target as MutableResult<T>, mutator as (records: WithStoreId<T>[]) => void);
+        }
+        return this._transactOne(target as WithStoreId<T>, mutator as (record: WithStoreId<T>) => void);
+    }
+
+    private async _transactOne<T>(record: WithStoreId<T>, mutator: (record: WithStoreId<T>) => void): Promise<void> {
+        const tableName = record.$table;
+        const snapshot = structuredClone(record as object) as WithStoreId<T>;
+
+        const diff: Record<string, unknown> = {};
+        const proxied = ObservableSlim.create(record as object, false, (changes) => {
+            for (const c of changes) {
+                diff[c.property] = c.newValue;
+            }
+        }) as WithStoreId<T>;
+
+        mutator(proxied);
+
+        if (Object.keys(diff).length === 0) return;
+
+        try {
+            await this._store.update(tableName, record.$id, diff);
+        } catch (err) {
+            Object.assign(record as object, snapshot);
+            throw err;
+        }
+    }
+
+    private async _transactBatch<T>(results: MutableResult<T>, mutator: (records: WithStoreId<T>[]) => void): Promise<void> {
         // 1. Snapshot every record for rollback
-        const snapshots = results.map(r => structuredClone(r as object) as T);
+        const snapshots = results.map(r => structuredClone(r as object) as WithStoreId<T>);
 
         // 2. Wire up observable-slim on each record to collect diffs
-        const diffs = new Map<unknown, Record<string, unknown>>();
+        const diffs = new Map<string, Record<string, unknown>>();
         const proxied = results.map((r) => {
-            const id = (r as any).$id;
+            const id = r.$id;
             return ObservableSlim.create(r as object, false, (changes) => {
                 for (const c of changes) {
                     if (!diffs.has(id)) diffs.set(id, {});
                     diffs.get(id)![c.property] = c.newValue;
                 }
-            }) as T;
+            }) as WithStoreId<T>;
         });
 
         // 3. Let the caller mutate
         mutator(proxied);
 
         // 4. Persist differential updates; rollback everything on failure
-        const committed: Array<{ index: number }> = [];
         try {
             for (const [id, diff] of diffs) {
                 await this._store.update(results._tableName, id, diff);
-                const idx = results.findIndex((r) => (r as any).$id === id);
-                if (idx !== -1) committed.push({ index: idx });
             }
         } catch (err) {
             // Restore all records to their pre-transaction state

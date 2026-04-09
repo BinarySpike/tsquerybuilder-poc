@@ -62,17 +62,22 @@ function applyAggregate(records: unknown[], agg: AggregateDescriptor): unknown {
 /**
  * Filters, orders, aggregates, and projects records.
  * Accepts Map entries so that the store key can be stamped onto each record
- * as a non-enumerable `$id` property before projection.
+ * as non-enumerable `$id` and `$table` properties before projection.
+ * Both are invisible to JSON.stringify / spread / schema validation.
  */
-export function executeDescriptor(entries: Iterable<[string, unknown]>, descriptor: QueryDescriptor): unknown[] {
-    // 1. Filter and stamp $id
+export function executeDescriptor(tableName: string, entries: Iterable<[string, unknown]>, descriptor: QueryDescriptor): unknown[] {
+    // 1. Filter and stamp $id + $table
     let results: unknown[] = [];
     for (const [key, record] of entries) {
         if (evaluateConditions(record, descriptor.conditions)) {
-            // Stamp non-enumerable $id so Transaction can identify the record
-            // without it leaking into JSON / spread / schema validation.
             Object.defineProperty(record as object, '$id', {
                 value: key,
+                enumerable: false,
+                configurable: true,
+                writable: false,
+            });
+            Object.defineProperty(record as object, '$table', {
+                value: tableName,
                 enumerable: false,
                 configurable: true,
                 writable: false,
@@ -144,7 +149,7 @@ class MemoryStore {
     }
 
     query(tableName: string, descriptor: QueryDescriptor): unknown[] {
-        return executeDescriptor(this._getTable(tableName).entries(), descriptor);
+        return executeDescriptor(tableName, this._getTable(tableName).entries(), descriptor);
     }
 }
 
