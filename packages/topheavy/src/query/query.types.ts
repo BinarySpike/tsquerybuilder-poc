@@ -1,4 +1,4 @@
-import type { Paths, PathType, SelectResult } from './path'
+import type { Paths, PathType } from './path'
 
 // ── Condition tree types ──────────────────────────────────────────────
 

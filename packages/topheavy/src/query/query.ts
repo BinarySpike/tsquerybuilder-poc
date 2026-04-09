@@ -2,7 +2,7 @@ import type { Query, QueryConditionLeaf, QueryConditionGroup, QueryConditions, Q
 
 type ConditionEntry = QueryConditionLeaf | QueryConditionGroup;
 
-class AggregateSelectorImpl {
+export class AggregateSelectorImpl {
   count() { return { type: 'count' as const }; }
   countDistinct(path: string) { return { type: 'countDistinct' as const, path }; }
   sum(path: string) { return { type: 'sum' as const, path }; }
@@ -12,12 +12,12 @@ class AggregateSelectorImpl {
   distinct(path: string) { return { type: 'distinct' as const, path }; }
 }
 
-class QueryBuilderImpl {
+export class QueryBuilderImpl {
   private _conditions: QueryConditions = [];
   private _currentGroup: QueryConditionGroup = [];
   private _currentPath: string = '';
   private _negated: boolean = false;
-  private _orderBys: QueryOrderBy[] = [];
+  protected _orderBys: QueryOrderBy[] = [];
 
   private _finalizeGroup(): void {
     while (this._currentGroup.length > 0) {

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Topheavy — localStorage Todo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 520px;
+      margin: 48px auto;
+      padding: 0 16px;
+      color: #1a1a1a;
+    }
+
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 0.875rem; margin-bottom: 24px; }
+
+    .add-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4f46e5;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
+    .btn-add { background: #4f46e5; color: #fff; }
+    .btn-add:hover { background: #4338ca; }
+    .btn-add:disabled { background: #a5b4fc; cursor: default; }
+
+    .stats {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 12px;
+    }
+
+    ul { list-style: none; padding: 0; margin: 0; }
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+
+    li.done span { text-decoration: line-through; color: #aaa; }
+
+    li span { flex: 1; font-size: 0.95rem; }
+
+    .btn-delete {
+      background: none;
+      color: #dc2626;
+      padding: 2px 8px;
+      border: 1px solid #fca5a5;
+      font-size: 0.8rem;
+    }
+
+    .btn-delete:hover { background: #fee2e2; }
+
+    .empty { color: #aaa; font-size: 0.9rem; padding: 16px 0; }
+  </style>
+</head>
+<body>
+  <h1>Todo List</h1>
+  <p class="subtitle">Persisted via <code>localStorage</code> using topheavy ORM</p>
+
+  <div class="add-row">
+    <input id="input" type="text" placeholder="What needs to be done?" />
+    <button id="add-btn" class="btn-add" disabled>Add</button>
+  </div>
+
+  <div id="stats" class="stats"></div>
+  <ul id="list"></ul>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
