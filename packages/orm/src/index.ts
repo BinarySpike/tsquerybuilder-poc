@@ -5,7 +5,6 @@ export type {
     DatabaseOptions,
     TableType,
     RepositoryItem,
-    MutableResult,
     OrmQueryBuilder,
     OrmResolver,
 } from './orm.types';

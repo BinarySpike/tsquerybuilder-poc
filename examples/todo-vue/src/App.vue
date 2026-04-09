@@ -64,6 +64,12 @@ async function onKeydown(e: KeyboardEvent): Promise<void> {
     if (e.key === 'Enter') await addTodo();
 }
 
+async function iWin(): Promise<void> {
+    await db.Transaction(todos.value, ts => {
+        ts.forEach(t => t.completed = true);
+    })
+}
+
 // ── Init ────────────────────────────────────────────────────────────────
 
 onMounted(load);
@@ -72,6 +78,7 @@ onMounted(load);
 <template>
     <h1>Todo List</h1>
     <p class="subtitle">Persisted via <code>localStorage</code> using topheavy ORM</p>
+    <button class="btn-add" @click="iWin">Click to Win</button>
 
     <div class="add-row">
         <input

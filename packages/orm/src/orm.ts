@@ -8,7 +8,6 @@ import type {
     DatabaseOptions,
     TableType,
     RepositoryItem,
-    MutableResult,
     OrmQueryBuilder,
     QueryDescriptor,
 } from './orm.types';
@@ -106,7 +105,7 @@ export function evaluateConditions(record: unknown, conditions: QueryConditions)
  * was called.
  *
  * _isAggregate tracks whether an aggregate callback was passed to select(),
- * so _execute knows whether to stamp _tableName (mutable) or not (aggregate).
+ * so _execute knows whether to cast the result as MutableResult or a plain array.
  */
 class OrmQueryBuilderImpl<T> extends QueryBuilderImpl implements OrmQueryBuilder<T> {
     private _descriptor: QueryDescriptor | null = null;
@@ -161,8 +160,8 @@ class OrmQueryBuilderImpl<T> extends QueryBuilderImpl implements OrmQueryBuilder
         };
     }
 
-    then<TResult1 = MutableResult<T>, TResult2 = never>(
-        onFulfilled?: ((value: MutableResult<T>) => TResult1 | PromiseLike<TResult1>) | null,
+    then<TResult1 = RepositoryItem<T>[], TResult2 = never>(
+        onFulfilled?: ((value: RepositoryItem<T>[]) => TResult1 | PromiseLike<TResult1>) | null,
         onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ): Promise<TResult1 | TResult2> {
         return this._db._execute<T>(this._tableName, this._buildDescriptor(), this._isAggregate).then(onFulfilled as any, onRejected) as any;
@@ -211,25 +210,24 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
      */
     async Transaction<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void>;
     /**
-     * Batch form: wraps all records in `MutableResult` with ObservableSlim
-     * proxies, runs `mutator`, then flushes one differential update per changed
-     * record to the store. On any store failure all in-memory mutations are
-     * reverted and the error is re-thrown.
+     * Batch form: wraps each record in an ObservableSlim proxy, runs `mutator`,
+     * then flushes one differential update per changed record to the store.
+     * On any store failure all in-memory mutations are reverted and the error is re-thrown.
      */
-    async Transaction<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
+    async Transaction<T extends object>(results: RepositoryItem<T>[], mutator: (records: RepositoryItem<T>[]) => void): Promise<void>;
     async Transaction<T extends object>(
-        target: RepositoryItem<T> | MutableResult<T>,
+        target: RepositoryItem<T> | RepositoryItem<T>[],
         mutator: ((record: RepositoryItem<T>) => void) | ((records: RepositoryItem<T>[]) => void),
     ): Promise<void> {
         if (Array.isArray(target)) {
-            return this._transactBatch(target as MutableResult<T>, mutator as (records: RepositoryItem<T>[]) => void);
+            return this._transactBatch(target as RepositoryItem<T>[], mutator as (records: RepositoryItem<T>[]) => void);
         }
         return this._transactOne(target as RepositoryItem<T>, mutator as (record: RepositoryItem<T>) => void);
     }
 
     private async _transactOne<T extends object>(record: RepositoryItem<T>, mutator: (record: RepositoryItem<T>) => void): Promise<void> {
         const tableName = record.$table;
-        const snapshot = structuredClone(record as object) as RepositoryItem<T>;
+        const snapshot = JSON.parse(JSON.stringify(record)) as RepositoryItem<T>;
 
         const diff: Record<string, unknown> = {};
         const proxied = ObservableSlim.create(record, false, (changes) => {
@@ -250,9 +248,9 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         }
     }
 
-    private async _transactBatch<T extends object>(results: MutableResult<T>, mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
+    private async _transactBatch<T extends object>(results: RepositoryItem<T>[], mutator: (records: RepositoryItem<T>[]) => void): Promise<void> {
         // 1. Snapshot every record for rollback
-        const snapshots = results.map(r => structuredClone(r as object) as RepositoryItem<T>);
+        const snapshots = results.map(r => JSON.parse(JSON.stringify(r)) as RepositoryItem<T>);
 
         // 2. Wire up observable-slim on each record to collect diffs
         const diffs = new Map<string, Record<string, unknown>>();
@@ -272,7 +270,7 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
         // 4. Persist differential updates; rollback everything on failure
         try {
             for (const [id, diff] of diffs) {
-                await this._store.update(results._tableName, id, diff);
+                await this._store.update(results[0].$table, id, diff);
             }
         } catch (err) {
             // Restore all records to their pre-transaction state
@@ -284,7 +282,7 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
     }
 
     /** @internal Used by OrmQueryBuilderImpl to execute against adapters. */
-    async _execute<T>(tableName: string, descriptor: QueryDescriptor, isAggregate: boolean): Promise<MutableResult<T> | T[]> {
+    async _execute<T>(tableName: string, descriptor: QueryDescriptor, isAggregate: boolean): Promise<RepositoryItem<T>[] | T[]> {
         // Check the cache for raw matching records (no aggregate/projection) so
         // that an empty cache applying an aggregate doesn't look like a cache hit.
         const rawCheck: QueryDescriptor = { conditions: descriptor.conditions, select: '*' };
@@ -301,13 +299,6 @@ export class Database<Tables extends Record<string, TypeDefinition<any, any>>> {
             return records as T[];
         }
 
-        // Stamp _tableName onto the array (non-enumerable) so Transaction can
-        // identify the source table without it appearing in spread/JSON.
-        return Object.defineProperty(records, '_tableName', {
-            value: tableName,
-            enumerable: false,
-            configurable: false,
-            writable: false,
-        }) as MutableResult<T>;
+        return records as RepositoryItem<T>[];
     }
 }
