@@ -19,11 +19,11 @@ type Todo = RepositoryItem<typeof TodoSchema.infer>;
 
 // ── Database setup ─────────────────────────────────────────────────────
 
-const db = new Database(
-    createLocalStorageCacheAdapter(),
-    createLocalStorageStorageAdapter(),
-    { tables: { todos: TodoSchema } },
-);
+const db = new Database({
+    cache: createLocalStorageCacheAdapter(),
+    store: createLocalStorageStorageAdapter(),
+    tables: { todos: TodoSchema },
+});
 
 // ── State ───────────────────────────────────────────────────────────────
 
@@ -65,12 +65,9 @@ async function onKeydown(e: KeyboardEvent): Promise<void> {
 }
 
 async function iWin(): Promise<void> {
-    await db.Transaction(todos.value, t => {
-        t.forEach(todo => {
-            todo.completed = true;
-        });
+    await db.Transaction(todos.value, ts => {
+        ts.forEach(t => t.completed = true);
     })
-    await load();
 }
 
 // ── Init ────────────────────────────────────────────────────────────────
@@ -80,8 +77,9 @@ onMounted(load);
 
 <template>
     <h1>Todo List</h1>
-    <p class="subtitle">Persisted via <code>localStorage</code> using TopHeavy!</p>
-    <button class="btn-add" @click="iWin">Click me to Win</button>
+    <p class="subtitle">Persisted via <code>localStorage</code> using topheavy ORM</p>
+    <button class="btn-add" @click="iWin">Click to Win</button>
+
     <div class="add-row">
         <input
             v-model="inputText"

@@ -45,6 +45,9 @@ export interface StoreAdapter {
 // ── Database options ──────────────────────────────────────────────────
 
 export interface DatabaseOptions<Tables extends Record<string, TypeDefinition<any, any>>> {
+    cache: CacheAdapter;
+    store: StoreAdapter;
+    reactive?: boolean;
     tables: Tables;
 }
 
@@ -52,25 +55,16 @@ export interface DatabaseOptions<Tables extends Record<string, TypeDefinition<an
 export type TableType<Tables, K extends keyof Tables> =
     Tables[K] extends TypeDefinition<infer T, any> ? T : never;
 
-// ── Mutable result ────────────────────────────────────────────────────
+// ── Repository item ───────────────────────────────────────────────────
 
 /**
  * A record returned from a query, augmented with its store key and source table.
  * Both `$id` and `$table` are stamped as non-enumerable properties by the store
  * adapter so they do not appear in JSON.stringify, spread, or schema validation —
- * but they are visible in the type system so `db.delete(tableName, record.$id)`
- * and `db.Transaction(record, ...)` compile without any cast.
+ * but they are visible in the type system so `db.delete(record)` and
+ * `db.Transaction(record, ...)` compile without any cast.
  */
 export type RepositoryItem<T> = T & { readonly $id: string; readonly $table: string };
-
-/**
- * Returned by non-aggregate selects. Each element is a `RepositoryItem<T>` with
- * `$id` and `$table` stamped on it by the adapter.
- *
- * Aggregate selects return a plain `A[]` whose elements lack `$id`/`$table`, so
- * TypeScript rejects passing them to `Database.Transaction` at compile time.
- */
-export type MutableResult<T> = Array<RepositoryItem<T>>;
 
 // ── ORM query types ───────────────────────────────────────────────────
 
@@ -78,17 +72,17 @@ export type MutableResult<T> = Array<RepositoryItem<T>>;
  * Extends QueryResolver<T> but overrides selectAll/select to return
  * PromiseLike results instead of plain descriptor objects.
  *
- * Non-aggregate selects resolve to MutableResult<T> (usable in Transaction).
+ * Non-aggregate selects resolve to RepositoryItem<T>[] (usable in Transaction).
  * Aggregate selects resolve to a plain array (not usable in Transaction —
- * enforced at compile time because elements lack $id/$table).
+ * enforced at compile time by the absence of $id/$table on aggregate items).
  */
-export interface OrmResolver<T> extends Omit<QueryResolver<T>, 'selectAll' | 'select'>, PromiseLike<MutableResult<T>> {
-    selectAll(): PromiseLike<MutableResult<T>>;
-    /** Non-aggregate: select specific fields — returns MutableResult */
-    select<P extends Paths<T>[]>(...paths: [...P]): PromiseLike<MutableResult<T>>;
-    /** Aggregate only: returns a plain array (NOT MutableResult) */
+export interface OrmResolver<T> extends Omit<QueryResolver<T>, 'selectAll' | 'select'>, PromiseLike<RepositoryItem<T>[]> {
+    selectAll(): PromiseLike<RepositoryItem<T>[]>;
+    /** Non-aggregate: select specific fields */
+    select<P extends Paths<T>[]>(...paths: [...P]): PromiseLike<RepositoryItem<T>[]>;
+    /** Aggregate only: returns a plain array (not usable in Transaction) */
     select<A>(aggregate: (s: AggregateSelector<T>) => A): PromiseLike<A[]>;
-    /** Mixed paths + aggregate: returns a plain array (NOT MutableResult) */
+    /** Mixed paths + aggregate: returns a plain array (not usable in Transaction) */
     select<P extends Paths<T>[], A>(...args: [...P, (s: AggregateSelector<T>) => A]): PromiseLike<A[]>;
 }
 
@@ -98,7 +92,7 @@ export interface OrmResolver<T> extends Omit<QueryResolver<T>, 'selectAll' | 'se
  * condition types. OrmResolver<T> threads through the chain so every
  * intermediate result is also awaitable.
  */
-export interface OrmQueryBuilder<T> extends PromiseLike<MutableResult<T>> {
+export interface OrmQueryBuilder<T> extends PromiseLike<RepositoryItem<T>[]> {
     where<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, OrmResolver<T>> & OrmResolver<T>>;
     andWhere<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, OrmResolver<T>> & OrmResolver<T>>;
     orWhere<P extends Paths<T>>(path: P): Condition<PathType<T, P>, ChainedQuery<T, PathType<T, P>, OrmResolver<T>> & OrmResolver<T>>;
